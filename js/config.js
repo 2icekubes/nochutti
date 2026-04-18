@@ -29,21 +29,21 @@ export const CONFIG = {
 
   // ── Time slots ───────────────────────────
   SLOTS: {
-    am: { label: "7:30 am", time: "07:30" },
-    pm: { label: "6:20 pm", time: "18:20" },
+    am: { label: "7:30 am", time: "08:30" },
+    pm: { label: "6:20 pm", time: "06:50" },
   },
 
   // ── Bus names ────────────────────────────
   BUSES: {
-    1: { name: "Bus 1", emoji: "🚌", capacity: 25 },
-    2: { name: "Bus 2", emoji: "🚐", capacity: 25 },
+    1: { name: "Bus 1", emoji: "🚌", capacity: 23 },
+    2: { name: "Bus 2", emoji: "🚐", capacity: 23 },
   },
 
   // ── Ride packs (₹) ───────────────────────
   PACKS: [
     { rides: 5,  amount: 650  },
-    { rides: 10, amount: 1250 },
-    { rides: 20, amount: 2500, best: true },
+    { rides: 20, amount: 2550 },
+    { rides: 40, amount: 4000, best: true },
   ],
 
   // ── Demo route (Kolkata coords) ──────────
