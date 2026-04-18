@@ -23,5 +23,5 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 // Export the things app.js needs to use!
-export { app, db, STOPS };
+export { app, db };
 //const analytics = getAnalytics(app);
