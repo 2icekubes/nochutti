@@ -22,6 +22,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Export the things app.js needs to use!
-export { app, db };
+// Tell the app Firebase is ready to go
+const firebaseReady = true;
+
+// Export everything app.js is asking for
+export { app, db, firebaseReady };
 //const analytics = getAnalytics(app);
