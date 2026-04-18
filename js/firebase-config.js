@@ -1,5 +1,5 @@
 // Import the functions you need from the SDKs you need
-mport { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 // If you are using a database, you also need to update that line too:
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { getAnalytics } from "firebase/analytics";
