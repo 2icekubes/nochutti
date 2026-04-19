@@ -8,7 +8,7 @@ export const CONFIG = {
   // ── Group join code ──────────────────────
   // Change this to whatever you want.
   // Share it with your riders on WhatsApp.
-  JOIN_CODE: "nochutti2025",
+  JOIN_CODE: "2026",
 
   // ── Driver PINs ──────────────────────────
   DRIVER_PINS: {
