@@ -514,6 +514,18 @@ window.confirmPay = function() {
   toast(`✓ Added ${rides} rides for ${r.name}`);
 };
 
+window.removeRider = function() {
+  if (!confirm('Are you sure you want to completely remove this rider?')) return;
+  const id = S.selectedRider;
+  if (firebaseReady && db) {
+    set(ref(db, `riders/${id}`), null);
+  }
+  delete S.riders[id];
+  renderRiders(); renderWallet();
+  closeModal();
+  toast('Rider removed');
+};
+
 // ── Tab nav ───────────────────────────────────
 window.goTab = function(tab) {
   ['map','riders','wallet'].forEach(t=>{

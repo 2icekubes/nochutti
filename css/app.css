@@ -98,7 +98,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 .btn-checkin.checked-in{background:var(--bg3);color:var(--grn);border:1px solid var(--grn)}
 
 /* TABBAR */
-.tabbar{display:flex;background:var(--bg1);border-top:1px solid var(--bdr);flex-shrink:0;padding:4px 0}
+.tabbar{display:flex;background:var(--bg1);border-top:1px solid var(--bdr);flex-shrink:0;padding:4px 0;position:relative;z-index:20}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border:none;background:none;color:var(--t2);font-family:var(--ff);font-size:10px;font-weight:500;cursor:pointer;transition:color .2s}
 .tab.active{color:var(--grn)}
 
