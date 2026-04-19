@@ -35,19 +35,7 @@
     </div>
 
     <div class="card">
-      <div class="field-label">Your full name</div>
-      <input type="text" id="setup-name" class="inp" placeholder="e.g. Ananya Roy" autocomplete="name">
-
-      <div class="field-label mt">Your boarding stop</div>
-      <select id="setup-stop" class="inp">
-        <option value="">Select stop…</option>
-      </select>
-
-      <div class="field-label mt">Group join code</div>
-      <input type="text" id="setup-code" class="inp" placeholder="Ask your driver or admin" autocapitalize="none">
-      <div class="hint">Your group has a shared code. Ask on WhatsApp.</div>
-
-      <div class="field-label mt">I am the</div>
+      <div class="field-label">I am the</div>
       <div class="role-row">
         <div class="role-tile" id="rt-rider" onclick="pickRole('rider')">
           <div class="role-emoji">🧑‍💼</div>
@@ -65,12 +53,31 @@
         </div>
       </div>
 
+      <div id="common-fields" class="hidden mt">
+        <div class="field-label">Your full name</div>
+        <input type="text" id="setup-name" class="inp" placeholder="e.g. Ananya Roy" autocomplete="name">
+
+        <div class="field-label mt">Mobile number</div>
+        <input type="tel" id="setup-phone" class="inp" placeholder="10-digit number" maxlength="10" inputmode="numeric">
+      </div>
+
+      <div id="rider-fields" class="hidden mt">
+        <div class="field-label">Your boarding stop</div>
+        <select id="setup-stop" class="inp">
+          <option value="">Select stop…</option>
+        </select>
+
+        <div class="field-label mt">Group join code</div>
+        <input type="text" id="setup-code" class="inp" placeholder="Ask your driver or admin" autocapitalize="none">
+        <div class="hint">Your group has a shared code. Ask on WhatsApp.</div>
+      </div>
+
       <div id="driver-pin-row" class="hidden mt">
         <div class="field-label">Driver PIN</div>
         <input type="password" id="driver-pin" class="inp" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
       </div>
 
-      <button class="btn-primary full mt24" onclick="doSetup()">Join NoChutti →</button>
+      <button class="btn-primary full mt24" id="btn-join" onclick="doSetup()" disabled>Select a role ↑</button>
     </div>
   </div>
 </div>

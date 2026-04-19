@@ -639,7 +639,16 @@ let _role = '';
 window.pickRole = function(r) {
   _role = r;
   ['rider','driver1','driver2'].forEach(x=>$(`rt-${x}`).classList.toggle('on', x===r));
-  $('driver-pin-row').classList.toggle('hidden', r==='rider');
+  $('common-fields').classList.remove('hidden');
+  $('btn-join').disabled = false;
+  $('btn-join').textContent = 'Join NoChutti →';
+  if (r.startsWith('driver')) {
+    $('rider-fields').classList.add('hidden');
+    $('driver-pin-row').classList.remove('hidden');
+  } else {
+    $('rider-fields').classList.remove('hidden');
+    $('driver-pin-row').classList.add('hidden');
+  }
 };
 
 // Populate stop dropdown in setup
@@ -653,32 +662,38 @@ function populateSetupStops() {
 }
 
 window.doSetup = function() {
-  const name = $('setup-name').value.trim();
-  const stop = $('setup-stop').value;
-  const code = $('setup-code').value.trim().toLowerCase();
-  if (!name) { toast('Enter your name'); return; }
-  if (!stop) { toast('Select your stop'); return; }
-  if (code !== CONFIG.JOIN_CODE) { toast('Wrong join code — ask your driver'); return; }
   if (!_role) { toast('Select your role'); return; }
+  const name = $('setup-name').value.trim();
+  const phone = $('setup-phone').value.trim();
+  if (!name) { toast('Enter your name'); return; }
+  if (!phone || phone.length !== 10) { toast('Enter a valid 10-digit mobile number'); return; }
 
-  if (_role.startsWith('driver')) {
+  if (_role === 'rider') {
+    const stop = $('setup-stop').value;
+    const code = $('setup-code').value.trim().toLowerCase();
+    if (!stop) { toast('Select your stop'); return; }
+    if (code !== CONFIG.JOIN_CODE) { toast('Wrong join code — ask your driver'); return; }
+  } else {
     const pin = $('driver-pin').value;
-    const expected = CONFIG.DRIVER_PINS[_role];
-    if (pin !== expected) { toast('Wrong driver PIN'); return; }
+    if (pin !== CONFIG.DRIVER_PINS[_role]) { toast('Wrong driver PIN'); return; }
   }
 
+  localStorage.setItem('nc_last_name', name);
+  localStorage.setItem('nc_last_phone', phone);
+
   const id = _role === 'rider'
-    ? `r_${name.replace(/\s/g,'').toLowerCase()}_${Date.now().toString(36)}`
+    ? `r_${phone}`
     : `${_role}_main`;
 
-  const user = { name, stop, role: _role, id };
+  const stopVal = _role === 'rider' ? $('setup-stop').value : '';
+  const user = { name, phone, stop: stopVal, role: _role, id };
   localStorage.setItem('nc_user', JSON.stringify(user));
 
   // Register rider in Firebase
   if (_role === 'rider' && firebaseReady && db) {
     const existing = S.riders[id];
     if (!existing) {
-      set(ref(db, `riders/${id}`), { name, stop, rides:0, maxRides:5, payments:[] });
+      set(ref(db, `riders/${id}`), { name, phone, stop: stopVal, rides:0, maxRides:5, payments:[], checkedIn:false, busToday:null });
     }
   }
 
@@ -720,6 +735,11 @@ function launch() {
 // ── Boot ──────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   populateSetupStops();
+
+  const lName = localStorage.getItem('nc_last_name');
+  const lPhone = localStorage.getItem('nc_last_phone');
+  if (lName) $('setup-name').value = lName;
+  if (lPhone) $('setup-phone').value = lPhone;
 
   setTimeout(() => {
     $('splash').classList.add('out');
