@@ -5,8 +5,8 @@
 import { db, firebaseReady } from './firebase-config.js';
 
 // 2. Import GOOGLE'S database tools directly from their web address
-import { ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
+import { ref, onValue, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { CONFIG } from './config.js';
 
 // ── State ─────────────────────────────────────
