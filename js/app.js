@@ -89,6 +89,8 @@ function initMap() {
     center: CONFIG.MAP_CENTER, zoom: CONFIG.MAP_ZOOM });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
 
+  L.polyline(CONFIG.DEMO_ROUTE, { color: '#4ade80', weight: 4, opacity: 0.8 }).addTo(map);
+
   // Stop markers
   CONFIG.STOPS.forEach(s => {
     const icon = L.divIcon({
@@ -200,15 +202,27 @@ function listenBusPositions() {
   });
 }
 
+function sweepMidnight() {
+  const d = today();
+  Object.values(S.riders).forEach(r => {
+    if (r.checkedIn && r.lastCheckin !== d) {
+      r.checkedIn = false;
+      r.busToday = null;
+    }
+  });
+}
+
 function listenRiders() {
   if (!firebaseReady || !db) {
     S.riders = DEMO_RIDERS;
-    renderRiders(); renderWallet(); updateOccupancy();
+    sweepMidnight();
+    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
     return;
   }
   onValue(ref(db, 'riders'), snap => {
     S.riders = snap.val() || {};
-    renderRiders(); renderWallet(); updateOccupancy();
+    sweepMidnight();
+    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
   });
 }
 
@@ -299,6 +313,19 @@ window.toggleCheckin = function() {
   const alreadyIn = rider?.checkedIn;
   const newStatus = !alreadyIn;
   const busAssigned = newStatus ? S.bus : null;
+
+  if (!newStatus && S.busPositions[S.bus]) {
+    const pos = S.busPositions[S.bus];
+    const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) || CONFIG.STOPS.find(s => s.name === S.user?.stop);
+    if (stop) {
+      const d = Math.sqrt(Math.pow((pos.lat-stop.lat)*111,2)+Math.pow((pos.lng-stop.lng)*111,2));
+      const approachKey = `bus${S.bus}_approach_${today()}`;
+      if (S.notifiedEvents.includes(approachKey) && d > 2.0) {
+        toast(`Check-out locked: Bus has already departed (> 2km away)`);
+        return;
+      }
+    }
+  }
 
   if (newStatus) {
     const ridersArray = Object.values(S.riders);
