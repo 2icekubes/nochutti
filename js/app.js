@@ -23,6 +23,7 @@ const S = {
   selectedPack: null,
   demoStep: { 1: 0, 2: 5 },
   demoInterval: null,
+  notifiedEvents: [],
 };
 
 // ── Demo riders ───────────────────────────────
@@ -72,6 +73,14 @@ function toast(msg) {
 }
 window.toast = toast;
 
+function showNotification(text) {
+  const el = $('in-app-notification');
+  if (!el) return;
+  $('ian-text').textContent = text;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 5000);
+}
+
 // ── Map ───────────────────────────────────────
 let map, busMarkers = {};
 
@@ -109,6 +118,29 @@ function moveBus(busN, lat, lng) {
   S.busPositions[busN] = { lat, lng, ts: Date.now() };
   updateStatusBadges();
   if (busN === S.bus) updateETA(lat, lng);
+  checkProximity(busN, lat, lng);
+}
+
+function checkProximity(busN, lat, lng) {
+  if (S.user?.role?.startsWith('driver')) return; 
+  if (busN !== S.bus) return; 
+  
+  const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) || CONFIG.STOPS.find(s => s.name === S.user?.stop);
+  if (!stop) return;
+  
+  const d = Math.sqrt(Math.pow((lat-stop.lat)*111,2)+Math.pow((lng-stop.lng)*111,2));
+  
+  const startKey = `bus${busN}_started_${today()}`;
+  if (!S.notifiedEvents.includes(startKey)) {
+    S.notifiedEvents.push(startKey);
+    showNotification(`Bus ${busN} has started its route!`);
+  }
+  
+  const approachKey = `bus${busN}_approach_${today()}`;
+  if (d < 1.0 && !S.notifiedEvents.includes(approachKey)) {
+    S.notifiedEvents.push(approachKey);
+    showNotification(`Bus ${busN} is approaching your stop!`);
+  }
 }
 
 function updateETA(lat, lng) {
@@ -268,6 +300,16 @@ window.toggleCheckin = function() {
   const newStatus = !alreadyIn;
   const busAssigned = newStatus ? S.bus : null;
 
+  if (newStatus) {
+    const ridersArray = Object.values(S.riders);
+    const count = ridersArray.filter(r => r.checkedIn && r.busToday === S.bus).length;
+    const capacity = CONFIG.BUSES[S.bus].capacity;
+    if (count >= capacity) {
+      toast(`Bus ${S.bus} is fully booked (${capacity}/${capacity})!`);
+      return;
+    }
+  }
+
   const updated = { ...(S.riders[id] || { name: S.user.name, stop: S.user.stop, rides:0, maxRides:5, payments:[] }),
     checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() };
 
@@ -302,6 +344,11 @@ function updateOccupancy() {
   $('occ1-count').style.color = col(c1);
   $('occ2-count').textContent = c2;
   $('occ2-count').style.color = col(c2);
+  
+  const cap1 = CONFIG.BUSES[1].capacity;
+  const cap2 = CONFIG.BUSES[2].capacity;
+  if ($('occ1-cap')) $('occ1-cap').textContent = `/ ${cap1} seats`;
+  if ($('occ2-cap')) $('occ2-cap').textContent = `/ ${cap2} seats`;
 }
 
 // ── Render Riders list ────────────────────────
