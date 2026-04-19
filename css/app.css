@@ -84,11 +84,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 /* MAP */
 .map-wrap{flex:1;position:relative;overflow:hidden}
 #map{width:100%;height:100%}
-.map-top-overlay{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:10;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:90%}
+.map-top-overlay{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:90%}
 .eta-chip{background:var(--bg0);border:1px solid var(--bdr2);border-radius:20px;padding:6px 16px;font-size:13px;font-weight:500;color:var(--t0);box-shadow:0 4px 20px rgba(0,0,0,0.5)}
 .bus-badges{display:flex;gap:6px}
 .bus-badge{background:var(--bg1);border:1px solid var(--bdr2);border-radius:14px;padding:4px 10px;font-size:11px;color:var(--t1)}
-.map-bottom-overlay{position:absolute;bottom:0;left:0;right:0;z-index:10;padding:12px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(transparent,rgba(13,31,15,0.96))}
+.map-bottom-overlay{position:absolute;bottom:0;left:0;right:0;z-index:1000;padding:12px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(transparent,rgba(13,31,15,0.96))}
 .btn-broadcast{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:var(--rl);border:none;font-family:var(--fh);font-size:15px;font-weight:700;background:var(--grn);color:#0d1f0f;cursor:pointer;transition:transform .1s,background .2s}
 .btn-broadcast:active{transform:scale(.98)}
 .btn-broadcast.live{background:var(--red);animation:pulse 2s infinite}

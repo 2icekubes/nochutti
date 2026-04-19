@@ -368,7 +368,10 @@ function renderRiderWallet(el) {
   const hist = (r.payments||[]).slice().reverse();
 
   el.innerHTML = `
-    <h2 class="panel-title" style="padding-top:4px">My wallet</h2>
+    <div class="panel-titlerow">
+      <h2 class="panel-title">My wallet</h2>
+      <button class="panel-close" onclick="goTab('map')">✕</button>
+    </div>
     <div class="wallet-hero">
       <div class="wh-label">Rides remaining</div>
       <div class="wh-count ${cc}">${r.rides||0}</div>
@@ -414,7 +417,10 @@ function renderDriverWallet(el) {
   const bus2 = riders.filter(([,r])=>r.checkedIn&&r.busToday===2).length;
 
   el.innerHTML = `
-    <h2 class="panel-title" style="padding-top:4px">Payments</h2>
+    <div class="panel-titlerow">
+      <h2 class="panel-title">Payments</h2>
+      <button class="panel-close" onclick="goTab('map')">✕</button>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
       ${[
         ['Total riders', total, 'var(--t0)'],

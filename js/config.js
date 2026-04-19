@@ -19,12 +19,12 @@ export const CONFIG = {
   // ── Boarding stops ───────────────────────
   // Add or remove stops for your route
   STOPS: [
-    { id: "sector5",   name: "Sector 5",    lat: 22.5726, lng: 88.3639 },
-    { id: "saltlake",  name: "Salt Lake",   lat: 22.5780, lng: 88.3570 },
-    { id: "parkst",    name: "Park Street", lat: 22.5822, lng: 88.3518 },
-    { id: "ultadanga", name: "Ultadanga",   lat: 22.5858, lng: 88.3462 },
-    { id: "shyambazar",name: "Shyambazar", lat: 22.5875, lng: 88.3438 },
-    { id: "office",    name: "Office",      lat: 22.5910, lng: 88.3400 },
+    { id: "sector5", name: "ESI Hospital", lat: 22.5726, lng: 88.3639 },
+    { id: "saltlake", name: "Salt Lake", lat: 22.5780, lng: 88.3570 },
+    { id: "parkst", name: "Park Street", lat: 22.5822, lng: 88.3518 },
+    { id: "ultadanga", name: "Ultadanga", lat: 22.5858, lng: 88.3462 },
+    { id: "shyambazar", name: "Shyambazar", lat: 22.5875, lng: 88.3438 },
+    { id: "office", name: "Office", lat: 22.5910, lng: 88.3400 },
   ],
 
   // ── Time slots ───────────────────────────
@@ -41,7 +41,7 @@ export const CONFIG = {
 
   // ── Ride packs (₹) ───────────────────────
   PACKS: [
-    { rides: 5,  amount: 650  },
+    { rides: 5, amount: 650 },
     { rides: 20, amount: 2550 },
     { rides: 40, amount: 4000, best: true },
   ],
