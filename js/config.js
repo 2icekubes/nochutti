@@ -35,8 +35,8 @@ export const CONFIG = {
 
   // ── Bus names ────────────────────────────
   BUSES: {
-    1: { name: "Bus 1", emoji: "🚌", capacity: 23 },
-    2: { name: "Bus 2", emoji: "🚐", capacity: 23 },
+    1: { name: "Bus 1", emoji: "🚌", capacity: 24 },
+    2: { name: "Bus 2", emoji: "🚐", capacity: 24 },
   },
 
   // ── Ride packs (₹) ───────────────────────

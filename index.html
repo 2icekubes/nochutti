@@ -78,6 +78,12 @@
 <!-- MAIN APP -->
 <div id="app" class="hidden">
 
+  <!-- IN-APP NOTIFICATION -->
+  <div id="in-app-notification" class="in-app-notification">
+    <div class="ian-icon">🔔</div>
+    <div class="ian-text" id="ian-text">Notification text</div>
+  </div>
+
   <!-- TOPBAR -->
   <div class="topbar" id="topbar">
     <div class="topbar-left">
@@ -169,12 +175,12 @@
         <div class="occ-card" id="occ-bus1">
           <div class="occ-label">Bus 1 today</div>
           <div class="occ-count" id="occ1-count">–</div>
-          <div class="occ-cap">/ 25 seats</div>
+          <div class="occ-cap" id="occ1-cap">/ 24 seats</div>
         </div>
         <div class="occ-card" id="occ-bus2">
           <div class="occ-label">Bus 2 today</div>
           <div class="occ-count" id="occ2-count">–</div>
-          <div class="occ-cap">/ 25 seats</div>
+          <div class="occ-cap" id="occ2-cap">/ 24 seats</div>
         </div>
       </div>
       <input type="text" class="inp search-inp" id="rider-search" placeholder="Search rider…" oninput="renderRiders()">
