@@ -150,18 +150,22 @@ function checkProximity(busN, lat, lng) {
 }
 
 function updateETA(lat, lng) {
+  const el = $('eta-text');
+  if (!el) return;
+
+  if (S.user?.role?.startsWith('driver')) {
+    const isBroadcastingThisBus = S.broadcasting && parseInt(S.user.role.slice(-1)) === S.bus;
+    el.textContent = isBroadcastingThisBus ? `Broadcasting Bus ${S.bus}` : `Bus ${S.bus} · ${CONFIG.SLOTS[S.slot].label}`;
+    return;
+  }
+
   const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) ||
                CONFIG.STOPS.find(s => s.name === S.user?.stop);
-  const el = $('eta-text');
-  if (!stop || !el) return;
+  if (!stop) return;
   const d = Math.sqrt(Math.pow((lat-stop.lat)*111,2)+Math.pow((lng-stop.lng)*111,2));
   if (d < 0.05) { el.textContent = `Bus ${S.bus} is at your stop! 🎉`; return; }
   const mins = Math.max(1, Math.round(d/28*60));
-  if (S.user?.role?.startsWith('driver')) {
-    el.textContent = `Bus ${S.bus} broadcasting · ${CONFIG.SLOTS[S.slot].label}`;
-  } else {
-    el.textContent = `Bus ${S.bus} · ~${mins} min to ${stop.name}`;
-  }
+  el.textContent = `Bus ${S.bus} · ~${mins} min to ${stop.name}`;
 }
 
 function updateStatusBadges() {
@@ -227,6 +231,44 @@ function listenRiders() {
     S.riders = snap.val() || {};
     sweepMidnight();
     renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
+  });
+}
+
+let riderMarkers = {};
+function listenRiderPositions() {
+  if (!firebaseReady || !db) return;
+  if (!S.user?.role?.startsWith('driver')) return;
+
+  onValue(ref(db, 'riderPositions'), snap => {
+    const data = snap.val() || {};
+    
+    Object.keys(data).forEach(id => {
+      const pos = data[id];
+      if (Date.now() - pos.ts > 15 * 60 * 1000) return;
+      
+      const riderInfo = S.riders[id] || {};
+      
+      if (!riderMarkers[id]) {
+        const icon = L.divIcon({
+          html: `<div style="width:24px;height:24px;border-radius:50%;background:rgba(96,165,250,0.25);border:1px solid rgba(96,165,250,0.5);display:flex;align-items:center;justify-content:center;"><div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;"></div></div>`,
+          iconSize: [24,24],
+          iconAnchor: [12,12],
+          className: ''
+        });
+        riderMarkers[id] = L.marker([pos.lat, pos.lng], { icon }).addTo(map)
+          .bindPopup(`<b style="color:#0d1f0f;font-size:13px">${riderInfo.name || 'Rider'}</b>`);
+      } else {
+        riderMarkers[id].setLatLng([pos.lat, pos.lng]);
+      }
+    });
+
+    Object.keys(riderMarkers).forEach(id => {
+      const pos = data[id];
+      if (!pos || Date.now() - pos.ts > 15 * 60 * 1000) {
+        map.removeLayer(riderMarkers[id]);
+        delete riderMarkers[id];
+      }
+    });
   });
 }
 
@@ -309,6 +351,48 @@ window.shareWA = function() {
   );
   window.open(`https://wa.me/?text=${msg}`, '_blank');
 };
+
+// ── Rider Location Sharing ──────────────────────
+window.toggleRiderLocation = function() {
+  S.riderBroadcasting ? stopRiderLocation() : startRiderLocation();
+};
+
+function startRiderLocation() {
+  if (!navigator.geolocation) { toast('Geolocation not available'); return; }
+  const id = S.user.id;
+  S.riderWatchId = navigator.geolocation.watchPosition(pos => {
+    const { latitude: lat, longitude: lng } = pos.coords;
+    if (firebaseReady && db) {
+      set(ref(db, `riderPositions/${id}`), { lat, lng, ts: Date.now() });
+    }
+  }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
+  S.riderBroadcasting = true;
+  updateRiderLocationBtn();
+  toast('Location sharing started');
+}
+
+function stopRiderLocation() {
+  if (S.riderWatchId) navigator.geolocation.clearWatch(S.riderWatchId);
+  S.riderWatchId = null;
+  S.riderBroadcasting = false;
+  if (firebaseReady && db) {
+    set(ref(db, `riderPositions/${S.user.id}`), null);
+  }
+  updateRiderLocationBtn();
+  toast('Location sharing stopped');
+}
+
+function updateRiderLocationBtn() {
+  const btn = $('btn-rider-loc');
+  if (!btn) return;
+  if (S.riderBroadcasting) {
+    btn.style.borderColor = 'var(--grn)';
+    btn.style.background = 'rgba(74,222,128,0.1)';
+  } else {
+    btn.style.borderColor = 'var(--bdr)';
+    btn.style.background = 'var(--bg1)';
+  }
+}
 
 window.endTrip = function() {
   if (!confirm('End trip and offboard all passengers for this bus?')) return;
@@ -773,6 +857,7 @@ function launch() {
   initMap();
   listenBusPositions();
   listenRiders();
+  listenRiderPositions();
 
   if (!isDriver) {
     // Slight delay then update check-in button
