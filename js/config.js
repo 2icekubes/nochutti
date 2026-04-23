@@ -16,6 +16,25 @@ export const CONFIG = {
     driver2: "5678",   // Bus 2 driver PIN
   },
 
+  // ── Driver UPI IDs ───────────────────────
+  // Used for pre-filled WhatsApp pay messages
+  DRIVER_UPI: {
+    driver1: "driver1@upi",
+    driver2: "driver2@upi",
+  },
+
+  // ── Auto-deduct ride on check-in ─────────
+  // Set to true to deduct 1 ride automatically when rider checks in
+  AUTO_DEDUCT_ON_CHECKIN: false,
+
+  // ── Proximity alert threshold (km) ───────
+  // Notification fires when bus is within this distance of rider's stop
+  PROXIMITY_ALERT_KM: 1.0,
+
+  // ── First stop proximity for "started" ───
+  // "Bus started" notification only fires if bus is within this km of first stop
+  ROUTE_START_RADIUS_KM: 2.0,
+
   // ── Boarding stops ───────────────────────
   // Add or remove stops for your route
   STOPS: [

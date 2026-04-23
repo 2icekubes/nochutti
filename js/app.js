@@ -100,14 +100,9 @@ function initMap() {
   // Stop markers
   let stopMarkers = {};
   CONFIG.STOPS.forEach(s => {
-    const icon = L.divIcon({
-      html:`<div style="width:10px;height:10px;border-radius:50%;background:#4ade80;border:2px solid #0d1f0f;box-shadow:0 0 0 2px #4ade80"></div>`,
-      iconSize:[10,10], iconAnchor:[5,5], className:''
-    });
-    stopMarkers[s.id] = L.marker([s.lat, s.lng], { icon }).addTo(map)
-      .bindPopup(`<b style="color:#0d1f0f;font-size:13px">${s.name}</b>`);
+    stopMarkers[s.id] = _makeStopMarker(s, 0).addTo(map);
   });
-  window._stopMarkers = stopMarkers; // expose for updateStopPopups
+  window._stopMarkers = stopMarkers;
 
   // Bus markers for both buses
   [1, 2].forEach(n => {
@@ -121,7 +116,21 @@ function initMap() {
   });
 }
 
+// Creates a stop marker icon sized/coloured by rider count
+function _makeStopMarker(s, count) {
+  const hasRiders = count > 0;
+  const size = hasRiders ? 14 : 10;
+  const bg = hasRiders ? '#4ade80' : '#555';
+  const glow = hasRiders ? ';box-shadow:0 0 0 3px rgba(74,222,128,0.4)' : '';
+  const icon = L.divIcon({
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid #0d1f0f${glow}"></div>`,
+    iconSize: [size, size], iconAnchor: [size/2, size/2], className: ''
+  });
+  return L.marker([s.lat, s.lng], { icon });
+}
+
 function updateBusPopup(busN) {
+
   if (!busMarkers[busN]) return;
   const bus = CONFIG.BUSES[busN];
 
@@ -160,25 +169,34 @@ function moveBus(busN, lat, lng) {
   updateStatusBadges();
   if (busN === S.bus) updateETA(lat, lng);
   checkProximity(busN, lat, lng);
+
+  // Pulse the bus marker icon if this driver is broadcasting
+  const isMyBus = S.user?.role === `driver${busN}` && S.broadcasting;
+  const el = document.getElementById(`busmarker-${busN}`);
+  if (el) el.classList.toggle('bus-live-pulse', isMyBus);
 }
 
 function checkProximity(busN, lat, lng) {
-  if (S.user?.role?.startsWith('driver')) return; 
-  if (busN !== S.bus) return; 
-  
+  if (S.user?.role?.startsWith('driver')) return;
+  if (busN !== S.bus) return;
+
   const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) || CONFIG.STOPS.find(s => s.name === S.user?.stop);
   if (!stop) return;
-  
-  const d = Math.sqrt(Math.pow((lat-stop.lat)*111,2)+Math.pow((lng-stop.lng)*111,2));
-  
+
+  const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
+
+  // "Bus started" only fires if bus is near the first route stop
+  const firstStop = CONFIG.STOPS[0];
+  const distFromFirst = Math.sqrt(Math.pow((lat - firstStop.lat) * 111, 2) + Math.pow((lng - firstStop.lng) * 111, 2));
   const startKey = `bus${busN}_started_${today()}`;
-  if (!S.notifiedEvents.includes(startKey)) {
+  if (distFromFirst < (CONFIG.ROUTE_START_RADIUS_KM || 2.0) && !S.notifiedEvents.includes(startKey)) {
     S.notifiedEvents.push(startKey);
     showNotification(`Bus ${busN} has started its route!`);
   }
-  
+
+  // Approach alert uses configurable threshold
   const approachKey = `bus${busN}_approach_${today()}`;
-  if (d < 1.0 && !S.notifiedEvents.includes(approachKey)) {
+  if (d < (CONFIG.PROXIMITY_ALERT_KM || 1.0) && !S.notifiedEvents.includes(approachKey)) {
     S.notifiedEvents.push(approachKey);
     showNotification(`Bus ${busN} is approaching your stop!`);
   }
@@ -197,9 +215,11 @@ function updateETA(lat, lng) {
   const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) ||
                CONFIG.STOPS.find(s => s.name === S.user?.stop);
   if (!stop) return;
-  const d = Math.sqrt(Math.pow((lat-stop.lat)*111,2)+Math.pow((lng-stop.lng)*111,2));
+  const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
   if (d < 0.05) { el.textContent = `Bus ${S.bus} is at your stop! 🎉`; return; }
-  const mins = Math.max(1, Math.round(d/28*60));
+  // Slot-aware speed: AM rush = 18 km/h, PM rush = 22 km/h
+  const speed = S.slot === 'am' ? 18 : 22;
+  const mins = Math.max(1, Math.round(d / speed * 60));
   el.textContent = `Bus ${S.bus} · ~${mins} min to ${stop.name}`;
 }
 
@@ -284,10 +304,9 @@ function updateStopPopups(openAll) {
   const busN = S.user?.role?.startsWith('driver') ? parseInt(S.user.role.slice(-1)) : null;
 
   CONFIG.STOPS.forEach(s => {
-    const marker = stopMarkers[s.id];
-    if (!marker) return;
+    const old = stopMarkers[s.id];
+    if (!old) return;
 
-    // Count riders checked in today who board at this stop
     const count = Object.values(S.riders).filter(r =>
       r.checkedIn && (r.stop === s.name || r.stop === s.id) &&
       (busN === null || r.busToday === busN)
@@ -300,8 +319,12 @@ function updateStopPopups(openAll) {
         <span style="color:#555;font-size:11px">rider${count !== 1 ? 's' : ''} today</span>
       </div>`;
 
-    marker.bindPopup(popupHtml);
-    if (openAll && count > 0) marker.openPopup();
+    // Swap marker icon to reflect count (remove old, add new)
+    const wasOpen = old.isPopupOpen();
+    old.remove();
+    const fresh = _makeStopMarker(s, count).bindPopup(popupHtml).addTo(map);
+    stopMarkers[s.id] = fresh;
+    if ((openAll && count > 0) || wasOpen) fresh.openPopup();
   });
 }
 
@@ -322,13 +345,14 @@ function listenRiderPositions() {
 
       // Rider name: try S.riders first, fall back to id
       const riderName = S.riders[id]?.name || id;
+      const av = initials(riderName);
       const popupHtml = `<div style="text-align:center;min-width:90px"><b style="color:#0d1f0f;font-size:13px">${riderName}</b><br><span style="color:#555;font-size:11px">Sharing location</span></div>`;
 
       if (!riderMarkers[id]) {
         const icon = L.divIcon({
-          html: `<div style="width:24px;height:24px;border-radius:50%;background:rgba(96,165,250,0.25);border:1.5px solid rgba(96,165,250,0.7);display:flex;align-items:center;justify-content:center;"><div style="width:9px;height:9px;border-radius:50%;background:#3b82f6;"></div></div>`,
-          iconSize: [24,24],
-          iconAnchor: [12,12],
+          html: `<div style="width:28px;height:28px;border-radius:50%;background:rgba(96,165,250,0.25);border:1.5px solid rgba(96,165,250,0.7);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#1d4ed8;letter-spacing:0">${av}</div>`,
+          iconSize: [28,28],
+          iconAnchor: [14,14],
           className: ''
         });
         riderMarkers[id] = L.marker([pos.lat, pos.lng], { icon })
@@ -474,12 +498,14 @@ function updateRiderLocationBtn() {
   }
 }
 
+// endTrip uses a styled modal instead of browser confirm()
 window.endTrip = function() {
-  if (!confirm('End trip and offboard all passengers for this bus?')) return;
+  openModal('modal-end-trip');
+};
+window.confirmEndTrip = function() {
+  closeModal();
   const busN = parseInt(S.user.role.slice(-1));
-  
   if (S.broadcasting) stopBroadcast();
-  
   const updates = {};
   let count = 0;
   Object.entries(S.riders).forEach(([id, r]) => {
@@ -489,25 +515,18 @@ window.endTrip = function() {
       count++;
     }
   });
-  
   if (count > 0) {
     if (firebaseReady && db) {
-      update(ref(db), updates).then(() => {
-        toast(`Trip ended. Offboarded ${count} passengers.`);
-      }).catch(err => toast('Error: ' + err.message));
+      update(ref(db), updates).then(() => toast(`Trip ended. Offboarded ${count} passengers.`))
+        .catch(err => toast('Error: ' + err.message));
     } else {
       Object.entries(S.riders).forEach(([id, r]) => {
-        if (r.checkedIn && r.busToday === busN) {
-          S.riders[id].checkedIn = false;
-          S.riders[id].busToday = null;
-        }
+        if (r.checkedIn && r.busToday === busN) { S.riders[id].checkedIn = false; S.riders[id].busToday = null; }
       });
       renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
       toast(`Trip ended. Offboarded ${count} passengers.`);
     }
-  } else {
-    toast('Trip ended. No passengers to offboard.');
-  }
+  } else { toast('Trip ended. No passengers to offboard.'); }
 };
 
 // ── Rider check-in ────────────────────────────
@@ -537,6 +556,18 @@ window.toggleCheckin = function() {
     const capacity = CONFIG.BUSES[S.bus].capacity;
     if (count >= capacity) {
       toast(`Bus ${S.bus} is fully booked (${capacity}/${capacity})!`);
+      return;
+    }
+  }
+
+  // Auto-deduct a ride on check-in if configured
+  if (newStatus && CONFIG.AUTO_DEDUCT_ON_CHECKIN) {
+    const riderData = S.riders[id] || {};
+    if ((riderData.rides || 0) > 0) {
+      const deducted = { ...riderData, rides: (riderData.rides || 0) - 1 };
+      if (firebaseReady && db) set(ref(db, `riders/${id}`), { ...deducted, checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() });
+      else { S.riders[id] = { ...deducted, checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() }; updateCheckinBtn(); updateOccupancy(); }
+      toast(`✓ Checked in on Bus ${busAssigned} · 1 ride deducted`);
       return;
     }
   }
@@ -582,26 +613,58 @@ function updateOccupancy() {
   if ($('occ2-cap')) $('occ2-cap').textContent = `/ ${cap2} seats`;
 }
 
+// Sort/filter state for rider panel (driver only)
+let _riderSort = 'rides';  // 'rides' | 'stop'
+let _riderFilter = 'all';  // 'all' | 'in'
+window.setRiderSort = s => { _riderSort = s; renderRiders(); };
+window.setRiderFilter = f => { _riderFilter = f; renderRiders(); };
+
 // ── Render Riders list ────────────────────────
 function renderRiders() {
   const el = $('rider-list');
   if (!el) return;
   const q = ($('rider-search')?.value||'').toLowerCase();
   const isDriver = S.user?.role?.startsWith('driver');
-  const entries = Object.entries(S.riders)
-    .filter(([,r])=>r.name.toLowerCase().includes(q))
-    .sort((a,b)=>(a[1].rides||0)-(b[1].rides||0));
 
-  const zeroes = entries.filter(([,r])=>!r.rides);
+  let entries = Object.entries(S.riders)
+    .filter(([,r]) => r.name.toLowerCase().includes(q));
 
-  let html = '';
-  if (zeroes.length && isDriver) {
-    html += zeroes.map(([,r])=>
-      `<div class="alert-strip">⚠️ ${r.name} — 0 rides, collect payment</div>`
-    ).join('');
+  // Checked-in filter (driver only)
+  if (isDriver && _riderFilter === 'in') {
+    entries = entries.filter(([,r]) => r.checkedIn);
   }
 
-  html += entries.map(([id,r])=>{
+  // Sorting
+  if (_riderSort === 'stop') {
+    // Sort by stop position in STOPS array
+    const stopOrder = {};
+    CONFIG.STOPS.forEach((s, i) => { stopOrder[s.name] = i; stopOrder[s.id] = i; });
+    entries.sort((a, b) => (stopOrder[a[1].stop] ?? 999) - (stopOrder[b[1].stop] ?? 999));
+  } else {
+    entries.sort((a, b) => (a[1].rides||0) - (b[1].rides||0));
+  }
+
+  const zeroes = entries.filter(([,r]) => !r.rides);
+
+  let html = '';
+
+  // Driver-only toolbar: sort + filter controls
+  if (isDriver) {
+    html += `<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="slot-pill${_riderSort==='rides'?' active':''}" onclick="setRiderSort('rides')">By rides</button>
+      <button class="slot-pill${_riderSort==='stop'?' active':''}" onclick="setRiderSort('stop')">By stop</button>
+      <button class="slot-pill${_riderFilter==='all'?' active':''}" onclick="setRiderFilter('all')" style="margin-left:auto">All</button>
+      <button class="slot-pill${_riderFilter==='in'?' active':''}" onclick="setRiderFilter('in')">Checked in</button>
+    </div>`;
+
+    if (zeroes.length) {
+      html += zeroes.map(([,r]) =>
+        `<div class="alert-strip">⚠️ ${r.name} — 0 rides, collect payment</div>`
+      ).join('');
+    }
+  }
+
+  html += entries.map(([id,r]) => {
     const pct = Math.min(100, ((r.rides||0)/(r.maxRides||5))*100);
     const [bg,fg] = avColor(id);
     const [cc,fc] = rideColor(r.rides||0);
@@ -834,15 +897,25 @@ window.closeModal = function() {
 // ── Settings ──────────────────────────────────
 window.openSettings = function() {
   $('s-name').value = S.user?.name||'';
-  // Populate stop dropdown
-  const sel = $('s-stop');
-  sel.innerHTML = CONFIG.STOPS.map(s=>`<option value="${s.name}" ${S.user?.stop===s.name?'selected':''}>${s.name}</option>`).join('');
+  const isDriver = S.user?.role?.startsWith('driver');
+  const stopRow = $('s-stop-row');
+  const busRow = $('s-bus-row');
+  if (isDriver) {
+    if (stopRow) stopRow.style.display = 'none';
+    if (busRow) { busRow.style.display = 'block'; $('s-bus-display').textContent = `Bus ${S.user.role.slice(-1)} (${S.user.name})`; }
+  } else {
+    if (stopRow) stopRow.style.display = 'block';
+    if (busRow) busRow.style.display = 'none';
+    const sel = $('s-stop');
+    sel.innerHTML = CONFIG.STOPS.map(s=>`<option value="${s.name}" ${S.user?.stop===s.name?'selected':''}>${s.name}</option>`).join('');
+  }
   openModal('modal-settings');
 };
 window.saveSettings = function() {
   const name = $('s-name').value.trim();
-  const stop = $('s-stop').value;
-  if (!name||!stop) { toast('Fill all fields'); return; }
+  const isDriver = S.user?.role?.startsWith('driver');
+  const stop = isDriver ? S.user.stop : $('s-stop').value;
+  if (!name || (!isDriver && !stop)) { toast('Fill all fields'); return; }
   S.user = {...S.user, name, stop};
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   $('avatar-btn').textContent = initials(name);
