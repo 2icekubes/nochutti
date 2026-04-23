@@ -16,6 +16,8 @@ const S = {
   slot: 'am',
   broadcasting: false,
   watchId: null,
+  riderBroadcasting: false,  // rider location sharing
+  riderWatchId: null,
   riders: {},          // id → rider
   checkins: {},        // "YYYY-MM-DD" → { bus1: Set<id>, bus2: Set<id> }
   busPositions: {},    // busN → { lat, lng, ts }
@@ -212,12 +214,20 @@ function listenBusPositions() {
 
 function sweepMidnight() {
   const d = today();
-  Object.values(S.riders).forEach(r => {
+  const updates = {};
+  let needsWrite = false;
+  Object.entries(S.riders).forEach(([id, r]) => {
     if (r.checkedIn && r.lastCheckin !== d) {
       r.checkedIn = false;
       r.busToday = null;
+      if (firebaseReady && db) {
+        updates[`riders/${id}/checkedIn`] = false;
+        updates[`riders/${id}/busToday`] = null;
+        needsWrite = true;
+      }
     }
   });
+  if (needsWrite) update(ref(db), updates).catch(err => console.warn('sweepMidnight error:', err));
 }
 
 function listenRiders() {
@@ -410,10 +420,21 @@ window.endTrip = function() {
     }
   });
   
-  if (count > 0 && firebaseReady && db) {
-    update(ref(db), updates).then(() => {
+  if (count > 0) {
+    if (firebaseReady && db) {
+      update(ref(db), updates).then(() => {
+        toast(`Trip ended. Offboarded ${count} passengers.`);
+      }).catch(err => toast('Error: ' + err.message));
+    } else {
+      Object.entries(S.riders).forEach(([id, r]) => {
+        if (r.checkedIn && r.busToday === busN) {
+          S.riders[id].checkedIn = false;
+          S.riders[id].busToday = null;
+        }
+      });
+      renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
       toast(`Trip ended. Offboarded ${count} passengers.`);
-    }).catch(err => toast('Error: ' + err.message));
+    }
   } else {
     toast('Trip ended. No passengers to offboard.');
   }
@@ -857,7 +878,7 @@ function launch() {
   initMap();
   listenBusPositions();
   listenRiders();
-  listenRiderPositions();
+  if (isDriver) listenRiderPositions();
 
   if (!isDriver) {
     // Slight delay then update check-in button
