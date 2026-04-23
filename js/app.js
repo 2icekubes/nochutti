@@ -98,14 +98,16 @@ function initMap() {
   L.polyline(CONFIG.DEMO_ROUTE, { color: '#4ade80', weight: 4, opacity: 0.8 }).addTo(map);
 
   // Stop markers
+  let stopMarkers = {};
   CONFIG.STOPS.forEach(s => {
     const icon = L.divIcon({
       html:`<div style="width:10px;height:10px;border-radius:50%;background:#4ade80;border:2px solid #0d1f0f;box-shadow:0 0 0 2px #4ade80"></div>`,
       iconSize:[10,10], iconAnchor:[5,5], className:''
     });
-    L.marker([s.lat, s.lng], { icon }).addTo(map)
+    stopMarkers[s.id] = L.marker([s.lat, s.lng], { icon }).addTo(map)
       .bindPopup(`<b style="color:#0d1f0f;font-size:13px">${s.name}</b>`);
   });
+  window._stopMarkers = stopMarkers; // expose for updateStopPopups
 
   // Bus markers for both buses
   [1, 2].forEach(n => {
@@ -122,34 +124,31 @@ function initMap() {
 function updateBusPopup(busN) {
   if (!busMarkers[busN]) return;
   const bus = CONFIG.BUSES[busN];
-  const driverKey = `driver${busN}_main`;
-  let driverName = 'Driver';
 
-  // Try to get driver name from Firebase
-  if (firebaseReady && db) {
-    get(child(ref(db), `riders/${driverKey}`)).then(snap => {
-      // Driver is not stored in riders — read from a dedicated path instead
-    }).catch(() => {});
-    // Listen for driver info stored under driverInfo/
+  // If the currently logged-in user IS this bus's driver, use their name directly
+  let driverName = '—';
+  if (S.user?.role === `driver${busN}`) {
+    driverName = S.user.name;
+  }
+
+  const popupContent = (name) => `
+    <div style="text-align:center;min-width:100px">
+      <div style="font-size:22px">${bus.emoji}</div>
+      <b style="color:#0d1f0f;font-size:14px">${bus.name}</b><br>
+      <span style="color:#444;font-size:12px">Driver: ${name}</span>
+    </div>`;
+
+  if (driverName !== '—') {
+    // Current user is the driver — use name immediately
+    busMarkers[busN].bindPopup(popupContent(driverName));
+  } else if (firebaseReady && db) {
+    // For riders/other drivers — listen to Firebase for that bus's driver name
     onValue(ref(db, `driverInfo/driver${busN}`), snap => {
       const info = snap.val();
-      const name = info?.name || driverName;
-      busMarkers[busN].bindPopup(
-        `<div style="text-align:center;min-width:100px">
-          <div style="font-size:22px">${bus.emoji}</div>
-          <b style="color:#0d1f0f;font-size:14px">${bus.name}</b><br>
-          <span style="color:#444;font-size:12px">Driver: ${name}</span>
-        </div>`
-      );
+      busMarkers[busN].bindPopup(popupContent(info?.name || '—'));
     });
   } else {
-    busMarkers[busN].bindPopup(
-      `<div style="text-align:center;min-width:100px">
-        <div style="font-size:22px">${bus.emoji}</div>
-        <b style="color:#0d1f0f;font-size:14px">${bus.name}</b><br>
-        <span style="color:#444;font-size:12px">Driver: —</span>
-      </div>`
-    );
+    busMarkers[busN].bindPopup(popupContent('—'));
   }
 }
 
@@ -268,13 +267,41 @@ function listenRiders() {
   if (!firebaseReady || !db) {
     S.riders = DEMO_RIDERS;
     sweepMidnight();
-    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
+    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
     return;
   }
   onValue(ref(db, 'riders'), snap => {
     S.riders = snap.val() || {};
     sweepMidnight();
-    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
+    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
+  });
+}
+
+// ── Stop popup counts ──────────────────────────
+function updateStopPopups(openAll) {
+  const stopMarkers = window._stopMarkers;
+  if (!stopMarkers) return;
+  const busN = S.user?.role?.startsWith('driver') ? parseInt(S.user.role.slice(-1)) : null;
+
+  CONFIG.STOPS.forEach(s => {
+    const marker = stopMarkers[s.id];
+    if (!marker) return;
+
+    // Count riders checked in today who board at this stop
+    const count = Object.values(S.riders).filter(r =>
+      r.checkedIn && (r.stop === s.name || r.stop === s.id) &&
+      (busN === null || r.busToday === busN)
+    ).length;
+
+    const popupHtml = `
+      <div style="text-align:center;min-width:80px">
+        <b style="color:#0d1f0f;font-size:13px">${s.name}</b><br>
+        <span style="font-size:20px;font-weight:700;color:${count > 0 ? '#16a34a' : '#999'}">${count}</span><br>
+        <span style="color:#555;font-size:11px">rider${count !== 1 ? 's' : ''} today</span>
+      </div>`;
+
+    marker.bindPopup(popupHtml);
+    if (openAll && count > 0) marker.openPopup();
   });
 }
 
@@ -368,6 +395,7 @@ function startBroadcast() {
   }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
   S.broadcasting = true;
   updateBroadcastBtn();
+  updateStopPopups(true); // open stop popups with rider counts on trip start
   toast(`📡 Broadcasting Bus ${busN} location`);
 }
 
