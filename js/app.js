@@ -265,7 +265,7 @@ function startBroadcast() {
     moveBus(busN, lat, lng);
     map.setView([lat, lng], 15);
     if (firebaseReady && db) {
-      set(ref(db, `bus${busN}/position`), { lat, lng, ts: serverTimestamp() });
+      set(ref(db, `bus${busN}/position`), { lat, lng, ts: Date.now() });
     }
   }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
   S.broadcasting = true;
