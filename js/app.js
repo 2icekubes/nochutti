@@ -43,7 +43,11 @@ const DEMO_RIDERS = {
 // ── Helpers ───────────────────────────────────
 const $ = id => document.getElementById(id);
 const initials = n => n.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+};
 const fmtDate = s => new Date(s).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
 
 const AV_COLORS = [
@@ -304,6 +308,31 @@ window.shareWA = function() {
     `(I'll drop a live location pin in a moment)`
   );
   window.open(`https://wa.me/?text=${msg}`, '_blank');
+};
+
+window.endTrip = function() {
+  if (!confirm('End trip and offboard all passengers for this bus?')) return;
+  const busN = parseInt(S.user.role.slice(-1));
+  
+  if (S.broadcasting) stopBroadcast();
+  
+  const updates = {};
+  let count = 0;
+  Object.entries(S.riders).forEach(([id, r]) => {
+    if (r.checkedIn && r.busToday === busN) {
+      updates[`riders/${id}/checkedIn`] = false;
+      updates[`riders/${id}/busToday`] = null;
+      count++;
+    }
+  });
+  
+  if (count > 0 && firebaseReady && db) {
+    update(ref(db), updates).then(() => {
+      toast(`Trip ended. Offboarded ${count} passengers.`);
+    }).catch(err => toast('Error: ' + err.message));
+  } else {
+    toast('Trip ended. No passengers to offboard.');
+  }
 };
 
 // ── Rider check-in ────────────────────────────
