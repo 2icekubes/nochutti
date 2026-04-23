@@ -114,9 +114,43 @@ function initMap() {
       html:`<div id="busmarker-${n}" style="width:38px;height:38px;border-radius:50%;background:#4ade80;border:3px solid #0d1f0f;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 14px rgba(74,222,128,.45)">${bus.emoji}</div>`,
       iconSize:[38,38], iconAnchor:[19,19], className:''
     });
-    busMarkers[n] = L.marker(CONFIG.MAP_CENTER, { icon, opacity: 0.5 }).addTo(map)
-      .bindPopup(`<b style="color:#0d1f0f">${bus.name}</b>`);
+    busMarkers[n] = L.marker(CONFIG.MAP_CENTER, { icon, opacity: 0.5 }).addTo(map);
+    updateBusPopup(n);
   });
+}
+
+function updateBusPopup(busN) {
+  if (!busMarkers[busN]) return;
+  const bus = CONFIG.BUSES[busN];
+  const driverKey = `driver${busN}_main`;
+  let driverName = 'Driver';
+
+  // Try to get driver name from Firebase
+  if (firebaseReady && db) {
+    get(child(ref(db), `riders/${driverKey}`)).then(snap => {
+      // Driver is not stored in riders — read from a dedicated path instead
+    }).catch(() => {});
+    // Listen for driver info stored under driverInfo/
+    onValue(ref(db, `driverInfo/driver${busN}`), snap => {
+      const info = snap.val();
+      const name = info?.name || driverName;
+      busMarkers[busN].bindPopup(
+        `<div style="text-align:center;min-width:100px">
+          <div style="font-size:22px">${bus.emoji}</div>
+          <b style="color:#0d1f0f;font-size:14px">${bus.name}</b><br>
+          <span style="color:#444;font-size:12px">Driver: ${name}</span>
+        </div>`
+      );
+    });
+  } else {
+    busMarkers[busN].bindPopup(
+      `<div style="text-align:center;min-width:100px">
+        <div style="font-size:22px">${bus.emoji}</div>
+        <b style="color:#0d1f0f;font-size:14px">${bus.name}</b><br>
+        <span style="color:#444;font-size:12px">Driver: —</span>
+      </div>`
+    );
+  }
 }
 
 function moveBus(busN, lat, lng) {
@@ -251,30 +285,38 @@ function listenRiderPositions() {
 
   onValue(ref(db, 'riderPositions'), snap => {
     const data = snap.val() || {};
-    
-    Object.keys(data).forEach(id => {
-      const pos = data[id];
-      if (Date.now() - pos.ts > 15 * 60 * 1000) return;
-      
-      const riderInfo = S.riders[id] || {};
-      
+    const now = Date.now();
+    const STALE_MS = 15 * 60 * 1000;
+
+    // Add / update markers for active riders
+    Object.entries(data).forEach(([id, pos]) => {
+      if (!pos?.lat || !pos?.lng) return;
+      if (now - pos.ts > STALE_MS) return;  // skip stale
+
+      // Rider name: try S.riders first, fall back to id
+      const riderName = S.riders[id]?.name || id;
+      const popupHtml = `<div style="text-align:center;min-width:90px"><b style="color:#0d1f0f;font-size:13px">${riderName}</b><br><span style="color:#555;font-size:11px">Sharing location</span></div>`;
+
       if (!riderMarkers[id]) {
         const icon = L.divIcon({
-          html: `<div style="width:24px;height:24px;border-radius:50%;background:rgba(96,165,250,0.25);border:1px solid rgba(96,165,250,0.5);display:flex;align-items:center;justify-content:center;"><div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;"></div></div>`,
+          html: `<div style="width:24px;height:24px;border-radius:50%;background:rgba(96,165,250,0.25);border:1.5px solid rgba(96,165,250,0.7);display:flex;align-items:center;justify-content:center;"><div style="width:9px;height:9px;border-radius:50%;background:#3b82f6;"></div></div>`,
           iconSize: [24,24],
           iconAnchor: [12,12],
           className: ''
         });
-        riderMarkers[id] = L.marker([pos.lat, pos.lng], { icon }).addTo(map)
-          .bindPopup(`<b style="color:#0d1f0f;font-size:13px">${riderInfo.name || 'Rider'}</b>`);
+        riderMarkers[id] = L.marker([pos.lat, pos.lng], { icon })
+          .bindPopup(popupHtml)
+          .addTo(map);
       } else {
         riderMarkers[id].setLatLng([pos.lat, pos.lng]);
+        riderMarkers[id].setPopupContent(popupHtml);
       }
     });
 
+    // Remove markers for riders who stopped sharing or went stale
     Object.keys(riderMarkers).forEach(id => {
       const pos = data[id];
-      if (!pos || Date.now() - pos.ts > 15 * 60 * 1000) {
+      if (!pos || now - pos.ts > STALE_MS) {
         map.removeLayer(riderMarkers[id]);
         delete riderMarkers[id];
       }
@@ -856,6 +898,12 @@ window.doSetup = function() {
     if (!existing) {
       set(ref(db, `riders/${id}`), { name, phone, stop: stopVal, rides:0, maxRides:5, payments:[], checkedIn:false, busToday:null });
     }
+  }
+
+  // Register driver name in Firebase so bus popup can show it
+  if (_role.startsWith('driver') && firebaseReady && db) {
+    const busNum = _role.slice(-1); // '1' or '2'
+    set(ref(db, `driverInfo/driver${busNum}`), { name, phone, ts: Date.now() });
   }
 
   S.user = user;
