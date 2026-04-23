@@ -294,7 +294,7 @@ function updateBroadcastBtn() {
     $('bc-icon').textContent = '🔴';
   } else {
     btn.classList.remove('live');
-    $('bc-label').textContent = 'Start broadcasting location';
+    $('bc-label').textContent = 'Start Trip and Broadcast Location';
     $('bc-icon').textContent = '📡';
   }
 }
