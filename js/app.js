@@ -919,6 +919,14 @@ window.saveSettings = function() {
   S.user = {...S.user, name, stop};
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   $('avatar-btn').textContent = initials(name);
+
+  // Sync driver name to Firebase and update local popup
+  if (isDriver && firebaseReady && db) {
+    const busNum = S.user.role.slice(-1);
+    update(ref(db), { [`driverInfo/driver${busNum}/name`]: name });
+    updateBusPopup(parseInt(busNum));
+  }
+
   closeModal(); toast('Saved ✓');
 };
 window.resetApp = function() {
@@ -1027,7 +1035,15 @@ function launch() {
   initMap();
   listenBusPositions();
   listenRiders();
-  if (isDriver) listenRiderPositions();
+
+  if (isDriver) {
+    listenRiderPositions();
+    // Ensure driver's local name is synced to Firebase for riders to see
+    if (firebaseReady && db) {
+      const busNum = u.role.slice(-1);
+      update(ref(db), { [`driverInfo/driver${busNum}/name`]: u.name, [`driverInfo/driver${busNum}/ts`]: Date.now() });
+    }
+  }
 
   if (!isDriver) {
     // Slight delay then update check-in button

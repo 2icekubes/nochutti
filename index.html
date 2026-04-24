@@ -253,11 +253,37 @@
   <div class="modal-body">
     <div class="field-label">Name</div>
     <input type="text" class="inp" id="s-name">
-    <div class="field-label mt">Stop</div>
-    <select class="inp" id="s-stop"></select>
+    <div id="s-stop-row">
+      <div class="field-label mt">Stop</div>
+      <select class="inp" id="s-stop"></select>
+    </div>
+    <div id="s-bus-row" style="display:none">
+      <div class="field-label mt">Bus Assignment</div>
+      <div class="inp" id="s-bus-display" style="background:var(--bg1);color:var(--t2)"></div>
+    </div>
     <button class="btn-primary full mt24" onclick="saveSettings()">Save</button>
     <button class="btn-ghost full mt" onclick="resetApp()">Reset / switch role</button>
     <button class="btn-ghost full mt" onclick="hardRefresh()">Force App Update</button>
+  </div>
+</div>
+
+<!-- End Trip modal -->
+<div id="modal-end-trip" class="modal hidden">
+  <div class="modal-handle"></div>
+  <div class="modal-head">
+    <div class="modal-title">End Trip</div>
+    <button class="modal-x" onclick="closeModal()">✕</button>
+  </div>
+  <div class="modal-body">
+    <div style="text-align:center;padding:16px 0;">
+      <div style="font-size:32px;margin-bottom:12px">🛑</div>
+      <h3 style="margin:0 0 8px;color:var(--t0)">Are you sure?</h3>
+      <p style="margin:0;color:var(--t2);font-size:14px;line-height:1.4">
+        This will stop broadcasting your location and offboard all passengers currently checked in to your bus.
+      </p>
+    </div>
+    <button class="btn-primary full mt24" style="background:var(--red);border-color:var(--red);color:white" onclick="confirmEndTrip()">Yes, end trip</button>
+    <button class="btn-ghost full mt" onclick="closeModal()">Cancel</button>
   </div>
 </div>
 
