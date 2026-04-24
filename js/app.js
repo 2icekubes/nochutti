@@ -141,10 +141,10 @@ function updateBusPopup(busN) {
   }
 
   const popupContent = (name) => `
-    <div style="text-align:center;min-width:100px">
-      <div style="font-size:22px">${bus.emoji}</div>
-      <b style="color:#0d1f0f;font-size:14px">${bus.name}</b><br>
-      <span style="color:#444;font-size:12px">Driver: ${name}</span>
+    <div style="text-align:center;min-width:80px;line-height:1.2">
+      <div style="font-size:18px;margin-bottom:2px">${bus.emoji}</div>
+      <b style="color:#0d1f0f;font-size:12px">${bus.name}</b><br>
+      <span style="color:#444;font-size:10px">Driver: ${name}</span>
     </div>`;
 
   if (driverName !== '—') {
@@ -313,10 +313,10 @@ function updateStopPopups(openAll) {
     ).length;
 
     const popupHtml = `
-      <div style="text-align:center;min-width:80px">
-        <b style="color:#0d1f0f;font-size:13px">${s.name}</b><br>
-        <span style="font-size:20px;font-weight:700;color:${count > 0 ? '#16a34a' : '#999'}">${count}</span><br>
-        <span style="color:#555;font-size:11px">rider${count !== 1 ? 's' : ''} today</span>
+      <div style="text-align:center;min-width:60px;line-height:1.2">
+        <b style="color:#0d1f0f;font-size:11px">${s.name}</b><br>
+        <span style="font-size:16px;font-weight:700;color:${count > 0 ? '#16a34a' : '#999'};display:inline-block;margin:2px 0">${count}</span><br>
+        <span style="color:#555;font-size:10px">rider${count !== 1 ? 's' : ''} today</span>
       </div>`;
 
     // Swap marker icon to reflect count (remove old, add new)
