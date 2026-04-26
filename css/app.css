@@ -187,9 +187,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .hidden{display:none!important}
 
-/* Leaflet dark skin */
-.leaflet-tile-pane{filter:brightness(.65) saturate(.5) hue-rotate(95deg)}
-.leaflet-container{background:#0d1f0f}
+/* Leaflet skin overrides */
+.leaflet-container{background:#e5e5e5}
 .leaflet-popup-content-wrapper{background:var(--bg1);color:var(--t0);border:1px solid var(--bdr2);border-radius:var(--rl)!important;box-shadow:0 8px 30px rgba(0,0,0,.6)}
 .leaflet-popup-tip{background:var(--bg1)}
 .leaflet-popup-close-button{color:var(--t2)!important}
