@@ -576,13 +576,12 @@ window.confirmEndTrip = function() {
     update(ref(db), updates).then(() => toast(`Trip ended. Offboarded ${count} passengers.`))
       .catch(err => toast('Error: ' + err.message));
   } else {
-      Object.entries(S.riders).forEach(([id, r]) => {
-        if (r.checkedIn && r.busToday === busN) { S.riders[id].checkedIn = false; S.riders[id].busToday = null; }
-      });
-      renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
-      toast(`Trip ended. Offboarded ${count} passengers.`);
-    }
-  } else { toast('Trip ended. No passengers to offboard.'); }
+    Object.entries(S.riders).forEach(([id, r]) => {
+      if (r.checkedIn && r.busToday === busN) { S.riders[id].checkedIn = false; S.riders[id].busToday = null; }
+    });
+    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
+    toast(`Trip ended. Offboarded ${count} passengers.`);
+  }
 };
 
 // ── Rider check-in ────────────────────────────
