@@ -176,6 +176,16 @@ function moveBus(busN, lat, lng) {
   if (el) el.classList.toggle('bus-live-pulse', isMyBus);
 }
 
+function hideBus(busN) {
+  if (busMarkers[busN]) busMarkers[busN].setOpacity(0);
+  delete S.busPositions[busN];
+  updateStatusBadges();
+  if (S.bus === busN) {
+    const el = $('eta-text');
+    if (el) el.textContent = 'Trip yet to start';
+  }
+}
+
 function checkProximity(busN, lat, lng) {
   if (S.user?.role?.startsWith('driver')) return;
   if (busN !== S.bus) return;
@@ -209,6 +219,12 @@ function updateETA(lat, lng) {
   if (S.user?.role?.startsWith('driver')) {
     const isBroadcastingThisBus = S.broadcasting && parseInt(S.user.role.slice(-1)) === S.bus;
     el.textContent = isBroadcastingThisBus ? `Broadcasting Bus ${S.bus}` : `Bus ${S.bus} · ${CONFIG.SLOTS[S.slot].label}`;
+    return;
+  }
+
+  const pos = S.busPositions[S.bus];
+  if (!pos || Date.now() - pos.ts > 30 * 60 * 1000) {
+    el.textContent = 'Trip yet to start';
     return;
   }
 
@@ -260,7 +276,11 @@ function listenBusPositions() {
   [1,2].forEach(n => {
     onValue(ref(db, `bus${n}/position`), snap => {
       const d = snap.val();
-      if (d?.lat) moveBus(n, d.lat, d.lng);
+      if (d?.lat && d?.ts && Date.now() - d.ts < 30 * 60 * 1000) {
+        moveBus(n, d.lat, d.lng);
+      } else {
+        hideBus(n);
+      }
     });
   });
 }
@@ -384,8 +404,13 @@ window.selectBus = function(n) {
     $(`bustab-${i}`).classList.toggle('active', i===n);
   });
   const pos = S.busPositions[n];
-  if (pos) { map.setView([pos.lat, pos.lng], 15); updateETA(pos.lat, pos.lng); }
-  else { $('eta-text').textContent = `Bus ${n} — no position yet`; }
+  if (pos && Date.now() - pos.ts < 30 * 60 * 1000) { 
+    map.setView([pos.lat, pos.lng], 15); 
+    updateETA(pos.lat, pos.lng); 
+  }
+  else { 
+    $('eta-text').textContent = `Trip yet to start`; 
+  }
 };
 
 window.selectSlot = function(slot) {
@@ -535,19 +560,22 @@ window.confirmEndTrip = function() {
   const busN = parseInt(S.user.role.slice(-1));
   if (S.broadcasting) stopBroadcast();
   const updates = {};
+  updates[`bus${busN}/position`] = null;
+  
   let count = 0;
   Object.entries(S.riders).forEach(([id, r]) => {
     if (r.checkedIn && r.busToday === busN) {
       updates[`riders/${id}/checkedIn`] = false;
       updates[`riders/${id}/busToday`] = null;
+      updates[`riders/${id}/onboarded`] = false;
       count++;
     }
   });
-  if (count > 0) {
-    if (firebaseReady && db) {
-      update(ref(db), updates).then(() => toast(`Trip ended. Offboarded ${count} passengers.`))
-        .catch(err => toast('Error: ' + err.message));
-    } else {
+  
+  if (firebaseReady && db) {
+    update(ref(db), updates).then(() => toast(`Trip ended. Offboarded ${count} passengers.`))
+      .catch(err => toast('Error: ' + err.message));
+  } else {
       Object.entries(S.riders).forEach(([id, r]) => {
         if (r.checkedIn && r.busToday === busN) { S.riders[id].checkedIn = false; S.riders[id].busToday = null; }
       });
