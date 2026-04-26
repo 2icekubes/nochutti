@@ -149,11 +149,14 @@
     </div>
 
     <!-- Rider: check-in button for today's bus -->
-    <div class="map-bottom-overlay" id="rider-checkin-overlay" style="display:none; align-items:flex-end;">
+    <div class="map-bottom-overlay" id="rider-checkin-overlay" style="display:none; align-items:flex-end; gap:8px;">
       <button class="btn-checkin" id="btn-checkin" onclick="toggleCheckin()" style="flex:1;">
         <span id="ci-icon">✓</span> <span id="ci-label">Check in for today</span>
       </button>
-      <button id="btn-rider-loc" onclick="toggleRiderLocation()" style="width:50px; height:50px; border-radius:50%; background:var(--bg1); border:2px solid var(--bdr); display:flex; align-items:center; justify-content:center; font-size:24px; color:var(--t0); margin-left:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); cursor:pointer;">
+      <button class="btn-checkin" id="btn-onboard" onclick="toggleOnboard()" style="flex:1; display:none;">
+        <span id="ob-icon">🚌</span> <span id="ob-label">Onboard bus now</span>
+      </button>
+      <button id="btn-rider-loc" onclick="toggleRiderLocation()" style="width:50px; height:50px; border-radius:50%; background:var(--bg1); border:2px solid var(--bdr); display:flex; align-items:center; justify-content:center; font-size:24px; color:var(--t0); box-shadow:0 4px 12px rgba(0,0,0,0.15); cursor:pointer; flex-shrink:0;">
         🧭
       </button>
     </div>

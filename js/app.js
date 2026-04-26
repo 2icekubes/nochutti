@@ -111,7 +111,7 @@ function initMap() {
       html:`<div id="busmarker-${n}" style="width:38px;height:38px;border-radius:50%;background:#4ade80;border:3px solid #0d1f0f;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 14px rgba(74,222,128,.45)">${bus.emoji}</div>`,
       iconSize:[38,38], iconAnchor:[19,19], className:''
     });
-    busMarkers[n] = L.marker(CONFIG.MAP_CENTER, { icon, opacity: 0.5 }).addTo(map);
+    busMarkers[n] = L.marker(CONFIG.MAP_CENTER, { icon, opacity: 0 }).addTo(map);
     updateBusPopup(n);
   });
 }
@@ -143,8 +143,8 @@ function updateBusPopup(busN) {
   const popupContent = (name) => `
     <div style="text-align:center;min-width:80px;line-height:1.2">
       <div style="font-size:18px;margin-bottom:2px">${bus.emoji}</div>
-      <b style="color:#0d1f0f;font-size:12px">${bus.name}</b><br>
-      <span style="color:#444;font-size:10px">Driver: ${name}</span>
+      <b style="color:var(--t0);font-size:12px">${bus.name}</b><br>
+      <span style="color:#aaa;font-size:10px">Driver: ${name}</span>
     </div>`;
 
   if (driverName !== '—') {
@@ -273,9 +273,11 @@ function sweepMidnight() {
     if (r.checkedIn && r.lastCheckin !== d) {
       r.checkedIn = false;
       r.busToday = null;
+      r.onboarded = false;
       if (firebaseReady && db) {
         updates[`riders/${id}/checkedIn`] = false;
         updates[`riders/${id}/busToday`] = null;
+        updates[`riders/${id}/onboarded`] = false;
         needsWrite = true;
       }
     }
@@ -314,9 +316,9 @@ function updateStopPopups(openAll) {
 
     const popupHtml = `
       <div style="text-align:center;min-width:60px;line-height:1.2">
-        <b style="color:#0d1f0f;font-size:11px">${s.name}</b><br>
-        <span style="font-size:16px;font-weight:700;color:${count > 0 ? '#16a34a' : '#999'};display:inline-block;margin:2px 0">${count}</span><br>
-        <span style="color:#555;font-size:10px">rider${count !== 1 ? 's' : ''} today</span>
+        <b style="color:var(--t0);font-size:11px">${s.name}</b><br>
+        <span style="font-size:16px;font-weight:700;color:${count > 0 ? '#4ade80' : '#aaa'};display:inline-block;margin:2px 0">${count}</span><br>
+        <span style="color:#aaa;font-size:10px">rider${count !== 1 ? 's' : ''} today</span>
       </div>`;
 
     // Swap marker icon to reflect count (remove old, add new)
@@ -346,7 +348,7 @@ function listenRiderPositions() {
       // Rider name: try S.riders first, fall back to id
       const riderName = S.riders[id]?.name || id;
       const av = initials(riderName);
-      const popupHtml = `<div style="text-align:center;min-width:90px"><b style="color:#0d1f0f;font-size:13px">${riderName}</b><br><span style="color:#555;font-size:11px">Sharing location</span></div>`;
+      const popupHtml = `<div style="text-align:center;min-width:90px"><b style="color:var(--t0);font-size:13px">${riderName}</b><br><span style="color:#aaa;font-size:11px">Sharing location</span></div>`;
 
       if (!riderMarkers[id]) {
         const icon = L.divIcon({
@@ -406,8 +408,22 @@ window.toggleBroadcast = function() {
   S.broadcasting ? stopBroadcast() : startBroadcast();
 };
 
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch (err) {}
+}
+function releaseWakeLock() {
+  if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }
+}
+
 function startBroadcast() {
   if (!navigator.geolocation) { toast('Geolocation not available'); return; }
+  requestWakeLock();
   const busN = parseInt(S.user.role.slice(-1));
   S.watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
@@ -427,6 +443,7 @@ function stopBroadcast() {
   if (S.watchId) navigator.geolocation.clearWatch(S.watchId);
   S.watchId = null;
   S.broadcasting = false;
+  releaseWakeLock();
   updateBroadcastBtn();
   toast('Broadcast stopped');
 }
@@ -461,11 +478,20 @@ window.toggleRiderLocation = function() {
   S.riderBroadcasting ? stopRiderLocation() : startRiderLocation();
 };
 
+let myMarker = null;
 function startRiderLocation() {
   if (!navigator.geolocation) { toast('Geolocation not available'); return; }
+  requestWakeLock();
   const id = S.user.id;
+  const icon = L.divIcon({
+    html: `<div style="width:28px;height:28px;border-radius:50%;background:rgba(248,113,113,0.25);border:1.5px solid rgba(248,113,113,0.7);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--red);">📍</div>`,
+    iconSize: [28,28], iconAnchor: [14,14], className: ''
+  });
+  if (!myMarker) myMarker = L.marker([0,0], { icon, opacity: 0 }).addTo(map);
+
   S.riderWatchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
+    if (myMarker) { myMarker.setLatLng([lat, lng]); myMarker.setOpacity(1); }
     if (firebaseReady && db) {
       set(ref(db, `riderPositions/${id}`), { lat, lng, ts: Date.now() });
     }
@@ -479,6 +505,8 @@ function stopRiderLocation() {
   if (S.riderWatchId) navigator.geolocation.clearWatch(S.riderWatchId);
   S.riderWatchId = null;
   S.riderBroadcasting = false;
+  releaseWakeLock();
+  if (myMarker) { map.removeLayer(myMarker); myMarker = null; }
   if (firebaseReady && db) {
     set(ref(db, `riderPositions/${S.user.id}`), null);
   }
@@ -585,16 +613,55 @@ window.toggleCheckin = function() {
   toast(newStatus ? `✓ Checked in on Bus ${busAssigned}` : 'Check-in removed');
 };
 
+window.toggleOnboard = function() {
+  const id = S.user.id;
+  const rider = S.riders[id];
+  if (!rider?.checkedIn) return;
+  
+  const isNowOnboard = !rider.onboarded;
+  
+  if (isNowOnboard && CONFIG.AUTO_DEDUCT_ON_CHECKIN && !rider.onboarded) {
+    if ((rider.rides || 0) > 0) {
+      rider.rides -= 1;
+      toast(`🚌 Onboarded Bus ${rider.busToday} · 1 ride deducted`);
+    } else {
+      toast(`No rides left. Please pay driver.`);
+    }
+  } else if (isNowOnboard) {
+    toast(`🚌 Onboarded Bus ${rider.busToday}`);
+  } else {
+    toast(`Offboarded Bus ${rider.busToday}`);
+  }
+
+  const updated = { ...S.riders[id], onboarded: isNowOnboard };
+  if (firebaseReady && db) set(ref(db, `riders/${id}`), updated);
+  else { S.riders[id] = updated; updateCheckinBtn(); }
+};
+
 function updateCheckinBtn() {
   const btn = $('btn-checkin');
+  const btnOb = $('btn-onboard');
   if (!btn) return;
   const rider = S.riders[S.user?.id];
   const isIn = rider?.checkedIn;
+  const isOb = rider?.onboarded;
+  
   btn.classList.toggle('checked-in', !!isIn);
   $('ci-icon').textContent = isIn ? '✓' : '○';
   $('ci-label').textContent = isIn
-    ? `On Bus ${rider.busToday} today · tap to remove`
+    ? `Checked in Bus ${rider.busToday}`
     : `Check in for Bus ${S.bus} today`;
+
+  if (btnOb) {
+    if (isIn) {
+      btnOb.style.display = 'flex';
+      btnOb.classList.toggle('checked-in', !!isOb);
+      $('ob-icon').textContent = isOb ? '✓' : '🚌';
+      $('ob-label').textContent = isOb ? 'Onboarded' : 'Onboard bus now';
+    } else {
+      btnOb.style.display = 'none';
+    }
+  }
 }
 
 function updateOccupancy() {
