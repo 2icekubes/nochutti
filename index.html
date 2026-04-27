@@ -37,16 +37,16 @@
     <div class="card">
       <div class="field-label">I am the</div>
       <div class="role-row">
-        <div class="role-tile" id="rt-rider" onclick="pickRole('rider')">
+        <div class="role-tile" id="rt-rider">
           <div class="role-emoji">🧑‍💼</div>
           <div class="role-name">Rider</div>
         </div>
-        <div class="role-tile" id="rt-driver1" onclick="pickRole('driver1')">
+        <div class="role-tile" id="rt-driver1">
           <div class="role-emoji">🚌</div>
           <div class="role-name">Driver A</div>
           <div class="role-sub">Bus 1</div>
         </div>
-        <div class="role-tile" id="rt-driver2" onclick="pickRole('driver2')">
+        <div class="role-tile" id="rt-driver2">
           <div class="role-emoji">🚐</div>
           <div class="role-name">Driver B</div>
           <div class="role-sub">Bus 2</div>
@@ -77,8 +77,8 @@
         <input type="password" id="driver-pin" class="inp" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
       </div>
 
-      <button class="btn-primary full mt24" id="btn-join" onclick="doSetup()" disabled>Select a role ↑</button>
-      <button class="btn-ghost full" style="margin-top:12px; color:var(--t2); font-size:13px; border-color:transparent; background:transparent;" onclick="hardRefresh()">↻ Force App Update</button>
+      <button type="button" class="btn-primary full mt24" id="btn-join" disabled>Select a role ↑</button>
+      <button type="button" class="btn-ghost full" style="margin-top:12px; color:var(--t2); font-size:13px; border-color:transparent; background:transparent;" id="btn-hard-refresh">↻ Force App Update</button>
     </div>
   </div>
 </div>
@@ -99,27 +99,27 @@
       <div class="topbar-ctx" id="topbar-ctx">Loading…</div>
     </div>
     <div class="topbar-right">
-      <button class="avatar-btn" id="avatar-btn" onclick="openSettings()">?</button>
+      <button type="button" class="avatar-btn" id="avatar-btn">?</button>
     </div>
   </div>
 
   <!-- BUS SELECTOR (2 buses) -->
   <div class="bus-bar" id="bus-bar">
-    <button class="bus-tab active" id="bustab-1" onclick="selectBus(1)">
+    <button type="button" class="bus-tab active" id="bustab-1">
       <span class="bus-tab-icon">🚌</span>
       <span class="bus-tab-label">Bus 1</span>
       <span class="bus-tab-sub" id="bustab-1-sub">7:30 am</span>
     </button>
     <div class="bus-divider"></div>
-    <button class="bus-tab" id="bustab-2" onclick="selectBus(2)">
+    <button type="button" class="bus-tab" id="bustab-2">
       <span class="bus-tab-icon">🚐</span>
       <span class="bus-tab-label">Bus 2</span>
       <span class="bus-tab-sub" id="bustab-2-sub">6:20 pm</span>
     </button>
     <!-- Slot pills -->
     <div class="slot-pills">
-      <button class="slot-pill active" id="sp-am" onclick="selectSlot('am')">AM</button>
-      <button class="slot-pill" id="sp-pm" onclick="selectSlot('pm')">PM</button>
+      <button type="button" class="slot-pill active" id="sp-am">AM</button>
+      <button type="button" class="slot-pill" id="sp-pm">PM</button>
     </div>
   </div>
 
@@ -141,22 +141,22 @@
 
     <!-- Driver bottom controls -->
     <div class="map-bottom-overlay" id="driver-overlay" style="display:none">
-      <button class="btn-broadcast" id="btn-broadcast" onclick="toggleBroadcast()">
+      <button type="button" class="btn-broadcast" id="btn-broadcast">
         <span id="bc-icon">📡</span> <span id="bc-label">Start Trip and Broadcast Location</span>
       </button>
-      <button class="btn-wa" onclick="shareWA()">💬 Share on WhatsApp</button>
-      <button class="btn-ghost" style="margin-top:8px; width:100%; color:var(--red); border-color:var(--red2);" onclick="endTrip()">🛑 End trip</button>
+      <button type="button" class="btn-wa" id="btn-wa">💬 Share on WhatsApp</button>
+      <button type="button" class="btn-ghost" id="btn-end-trip" style="margin-top:8px; width:100%; color:var(--red); border-color:var(--red2);">🛑 End trip</button>
     </div>
 
     <!-- Rider: check-in button for today's bus -->
     <div class="map-bottom-overlay" id="rider-checkin-overlay" style="display:none; align-items:flex-end; gap:8px;">
-      <button class="btn-checkin" id="btn-checkin" onclick="toggleCheckin()" style="flex:1;">
+      <button type="button" class="btn-checkin" id="btn-checkin" style="flex:1;">
         <span id="ci-icon">✓</span> <span id="ci-label">Check in for today</span>
       </button>
-      <button class="btn-checkin" id="btn-onboard" onclick="toggleOnboard()" style="flex:1; display:none;">
+      <button type="button" class="btn-checkin" id="btn-onboard" style="flex:1; display:none;">
         <span id="ob-icon">🚌</span> <span id="ob-label">Onboard bus now</span>
       </button>
-      <button id="btn-rider-loc" onclick="toggleRiderLocation()" style="width:50px; height:50px; border-radius:50%; background:var(--bg1); border:2px solid var(--bdr); display:flex; align-items:center; justify-content:center; font-size:24px; color:var(--t0); box-shadow:0 4px 12px rgba(0,0,0,0.15); cursor:pointer; flex-shrink:0;">
+      <button type="button" id="btn-rider-loc" style="width:50px; height:50px; border-radius:50%; background:var(--bg1); border:2px solid var(--bdr); display:flex; align-items:center; justify-content:center; font-size:24px; color:var(--t0); box-shadow:0 4px 12px rgba(0,0,0,0.15); cursor:pointer; flex-shrink:0;">
         🧭
       </button>
     </div>
@@ -164,15 +164,15 @@
 
   <!-- TAB BAR -->
   <div class="tabbar">
-    <button class="tab active" id="tab-map" onclick="goTab('map')">
+    <button type="button" class="tab active" id="tab-map">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
       <span>Track</span>
     </button>
-    <button class="tab" id="tab-riders" onclick="goTab('riders')">
+    <button type="button" class="tab" id="tab-riders">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span>Riders</span>
     </button>
-    <button class="tab" id="tab-wallet" onclick="goTab('wallet')">
+    <button type="button" class="tab" id="tab-wallet">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
       <span>Wallet</span>
     </button>
@@ -183,7 +183,7 @@
     <div class="panel-inner">
       <div class="panel-titlerow">
         <h2 class="panel-title">Riders</h2>
-        <button class="panel-close" onclick="goTab('map')">✕</button>
+        <button type="button" class="panel-close" id="btn-panel-close">✕</button>
       </div>
       <!-- Today's bus occupancy -->
       <div class="occ-row" id="occ-row">
@@ -210,14 +210,14 @@
 </div><!-- /app -->
 
 <!-- MODALS -->
-<div id="backdrop" class="backdrop hidden" onclick="closeModal()"></div>
+<div id="backdrop" class="backdrop hidden"></div>
 
 <!-- Pay modal -->
 <div id="modal-pay" class="modal hidden">
   <div class="modal-handle"></div>
   <div class="modal-head">
     <div class="modal-title">Mark payment</div>
-    <button class="modal-x" onclick="closeModal()">✕</button>
+    <button type="button" class="modal-x">✕</button>
   </div>
   <div class="modal-body">
     <div id="pay-rider-info" class="pay-rider-info"></div>
@@ -241,8 +241,8 @@
       <input type="number" class="inp" id="c-rides" placeholder="Rides">
       <input type="number" class="inp" id="c-amount" placeholder="Amount ₹" style="margin-top:8px">
     </div>
-    <button class="btn-primary full mt24" onclick="confirmPay()">Confirm received ✓</button>
-    <button class="btn-ghost full mt" style="color:var(--red); border-color:var(--red2);" onclick="removeRider()">Remove Rider</button>
+    <button type="button" class="btn-primary full mt24" id="btn-confirm-pay">Confirm received ✓</button>
+    <button type="button" class="btn-ghost full mt" id="btn-remove-rider" style="color:var(--red); border-color:var(--red2);">Remove Rider</button>
   </div>
 </div>
 
@@ -251,7 +251,7 @@
   <div class="modal-handle"></div>
   <div class="modal-head">
     <div class="modal-title">Settings</div>
-    <button class="modal-x" onclick="closeModal()">✕</button>
+    <button type="button" class="modal-x">✕</button>
   </div>
   <div class="modal-body">
     <div class="field-label">Name</div>
@@ -264,9 +264,9 @@
       <div class="field-label mt">Bus Assignment</div>
       <div class="inp" id="s-bus-display" style="background:var(--bg1);color:var(--t2)"></div>
     </div>
-    <button class="btn-primary full mt24" onclick="saveSettings()">Save</button>
-    <button class="btn-ghost full mt" onclick="resetApp()">Reset / switch role</button>
-    <button class="btn-ghost full mt" onclick="hardRefresh()">Force App Update</button>
+    <button type="button" class="btn-primary full mt24" id="btn-save-settings">Save</button>
+    <button type="button" class="btn-ghost full mt" id="btn-reset-app">Reset / switch role</button>
+    <button type="button" class="btn-ghost full mt" id="btn-hard-refresh-settings">Force App Update</button>
   </div>
 </div>
 
@@ -275,7 +275,7 @@
   <div class="modal-handle"></div>
   <div class="modal-head">
     <div class="modal-title">End Trip</div>
-    <button class="modal-x" onclick="closeModal()">✕</button>
+    <button type="button" class="modal-x">✕</button>
   </div>
   <div class="modal-body">
     <div style="text-align:center;padding:16px 0;">
@@ -285,8 +285,8 @@
         This will stop broadcasting your location and offboard all passengers currently checked in to your bus.
       </p>
     </div>
-    <button class="btn-primary full mt24" style="background:var(--red);border-color:var(--red);color:white" onclick="confirmEndTrip()">Yes, end trip</button>
-    <button class="btn-ghost full mt" onclick="closeModal()">Cancel</button>
+    <button type="button" class="btn-primary full mt24" style="background:var(--red);border-color:var(--red);color:white" id="btn-confirm-end-trip">Yes, end trip</button>
+    <button type="button" class="btn-ghost full mt" id="btn-cancel-end-trip">Cancel</button>
   </div>
 </div>
 

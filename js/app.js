@@ -26,7 +26,26 @@ const S = {
   demoStep: { 1: 0, 2: 5 },
   demoInterval: null,
   notifiedEvents: [],
+  driverInfo: { 1: null, 2: null },
 };
+
+const DB_READY = () => firebaseReady && db;
+const dbOnValue = (path, cb) => {
+  if (!DB_READY()) return () => {};
+  return onValue(ref(db, path), cb);
+};
+const dbSet = (path, value) => DB_READY() ? set(ref(db, path), value) : Promise.resolve();
+const dbUpdateValues = (values) => DB_READY() ? update(ref(db), values) : Promise.resolve();
+const dbRemove = (path) => DB_READY() ? set(ref(db, path), null) : Promise.resolve();
+
+function initDriverInfoListeners() {
+  [1, 2].forEach(n => {
+    dbOnValue(`driverInfo/driver${n}`, snap => {
+      S.driverInfo[n] = snap.val()?.name || '—';
+      updateBusPopup(n);
+    });
+  });
+}
 
 // ── Demo riders ───────────────────────────────
 const DEMO_RIDERS = {
@@ -134,11 +153,9 @@ function updateBusPopup(busN) {
   if (!busMarkers[busN]) return;
   const bus = CONFIG.BUSES[busN];
 
-  // If the currently logged-in user IS this bus's driver, use their name directly
-  let driverName = '—';
-  if (S.user?.role === `driver${busN}`) {
-    driverName = S.user.name;
-  }
+  const driverName = S.user?.role === `driver${busN}`
+    ? S.user.name
+    : S.driverInfo[busN] || '—';
 
   const popupContent = (name) => `
     <div style="text-align:center;min-width:80px;line-height:1.2">
@@ -147,18 +164,7 @@ function updateBusPopup(busN) {
       <span style="color:#aaa;font-size:10px">Driver: ${name}</span>
     </div>`;
 
-  if (driverName !== '—') {
-    // Current user is the driver — use name immediately
-    busMarkers[busN].bindPopup(popupContent(driverName));
-  } else if (firebaseReady && db) {
-    // For riders/other drivers — listen to Firebase for that bus's driver name
-    onValue(ref(db, `driverInfo/driver${busN}`), snap => {
-      const info = snap.val();
-      busMarkers[busN].bindPopup(popupContent(info?.name || '—'));
-    });
-  } else {
-    busMarkers[busN].bindPopup(popupContent('—'));
-  }
+  busMarkers[busN].bindPopup(popupContent(driverName));
 }
 
 function moveBus(busN, lat, lng) {
@@ -272,9 +278,9 @@ function startDemo() {
 
 // ── Firebase listeners ────────────────────────
 function listenBusPositions() {
-  if (!firebaseReady || !db) { startDemo(); return; }
+  if (!DB_READY()) { startDemo(); return; }
   [1,2].forEach(n => {
-    onValue(ref(db, `bus${n}/position`), snap => {
+    dbOnValue(`bus${n}/position`, snap => {
       const d = snap.val();
       if (d?.lat && d?.ts && Date.now() - d.ts < 30 * 60 * 1000) {
         moveBus(n, d.lat, d.lng);
@@ -294,7 +300,7 @@ function sweepMidnight() {
       r.checkedIn = false;
       r.busToday = null;
       r.onboarded = false;
-      if (firebaseReady && db) {
+      if (DB_READY()) {
         updates[`riders/${id}/checkedIn`] = false;
         updates[`riders/${id}/busToday`] = null;
         updates[`riders/${id}/onboarded`] = false;
@@ -302,17 +308,17 @@ function sweepMidnight() {
       }
     }
   });
-  if (needsWrite) update(ref(db), updates).catch(err => console.warn('sweepMidnight error:', err));
+  if (needsWrite) dbUpdateValues(updates).catch(err => console.warn('sweepMidnight error:', err));
 }
 
 function listenRiders() {
-  if (!firebaseReady || !db) {
+  if (!DB_READY()) {
     S.riders = DEMO_RIDERS;
     sweepMidnight();
     renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
     return;
   }
-  onValue(ref(db, 'riders'), snap => {
+  dbOnValue('riders', snap => {
     S.riders = snap.val() || {};
     sweepMidnight();
     renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
@@ -352,10 +358,10 @@ function updateStopPopups(openAll) {
 
 let riderMarkers = {};
 function listenRiderPositions() {
-  if (!firebaseReady || !db) return;
+  if (!DB_READY()) return;
   if (!S.user?.role?.startsWith('driver')) return;
 
-  onValue(ref(db, 'riderPositions'), snap => {
+  dbOnValue('riderPositions', snap => {
     const data = snap.val() || {};
     const now = Date.now();
     const STALE_MS = 15 * 60 * 1000;
@@ -454,9 +460,7 @@ function startBroadcast() {
     const { latitude: lat, longitude: lng } = pos.coords;
     moveBus(busN, lat, lng);
     map.setView([lat, lng], 15);
-    if (firebaseReady && db) {
-      set(ref(db, `bus${busN}/position`), { lat, lng, ts: Date.now() });
-    }
+    dbSet(`bus${busN}/position`, { lat, lng, ts: Date.now() });
   }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
   S.broadcasting = true;
   updateBroadcastBtn();
@@ -517,9 +521,7 @@ function startRiderLocation() {
   S.riderWatchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
     if (myMarker) { myMarker.setLatLng([lat, lng]); myMarker.setOpacity(1); }
-    if (firebaseReady && db) {
-      set(ref(db, `riderPositions/${id}`), { lat, lng, ts: Date.now() });
-    }
+    dbSet(`riderPositions/${id}`, { lat, lng, ts: Date.now() });
   }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
   S.riderBroadcasting = true;
   updateRiderLocationBtn();
@@ -532,9 +534,7 @@ function stopRiderLocation() {
   S.riderBroadcasting = false;
   releaseWakeLock();
   if (myMarker) { map.removeLayer(myMarker); myMarker = null; }
-  if (firebaseReady && db) {
-    set(ref(db, `riderPositions/${S.user.id}`), null);
-  }
+  dbRemove(`riderPositions/${S.user.id}`);
   updateRiderLocationBtn();
   toast('Location sharing stopped');
 }
@@ -572,8 +572,8 @@ window.confirmEndTrip = function() {
     }
   });
   
-  if (firebaseReady && db) {
-    update(ref(db), updates).then(() => toast(`Trip ended. Offboarded ${count} passengers.`))
+  if (DB_READY()) {
+    dbUpdateValues(updates).then(() => toast(`Trip ended. Offboarded ${count} passengers.`))
       .catch(err => toast('Error: ' + err.message));
   } else {
     Object.entries(S.riders).forEach(([id, r]) => {
@@ -620,8 +620,12 @@ window.toggleCheckin = function() {
     const riderData = S.riders[id] || {};
     if ((riderData.rides || 0) > 0) {
       const deducted = { ...riderData, rides: (riderData.rides || 0) - 1 };
-      if (firebaseReady && db) set(ref(db, `riders/${id}`), { ...deducted, checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() });
-      else { S.riders[id] = { ...deducted, checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() }; updateCheckinBtn(); updateOccupancy(); }
+      if (DB_READY()) {
+        dbSet(`riders/${id}`, { ...deducted, checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() });
+      } else {
+        S.riders[id] = { ...deducted, checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() };
+        updateCheckinBtn(); updateOccupancy();
+      }
       toast(`✓ Checked in on Bus ${busAssigned} · 1 ride deducted`);
       return;
     }
@@ -630,8 +634,8 @@ window.toggleCheckin = function() {
   const updated = { ...(S.riders[id] || { name: S.user.name, stop: S.user.stop, rides:0, maxRides:5, payments:[] }),
     checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() };
 
-  if (firebaseReady && db) {
-    set(ref(db, `riders/${id}`), updated);
+  if (DB_READY()) {
+    dbSet(`riders/${id}`, updated);
   } else {
     S.riders[id] = updated;
     updateCheckinBtn();
@@ -661,7 +665,7 @@ window.toggleOnboard = function() {
   }
 
   const updated = { ...S.riders[id], onboarded: isNowOnboard };
-  if (firebaseReady && db) set(ref(db, `riders/${id}`), updated);
+  if (DB_READY()) dbSet(`riders/${id}`, updated);
   else { S.riders[id] = updated; updateCheckinBtn(); }
 };
 
@@ -939,8 +943,8 @@ window.confirmPay = function() {
   const newMax = Math.max(r.maxRides||5, newRides);
   const payment = { rides, amount, ts: new Date().toISOString(), method:'UPI/GPay' };
   const updated = { ...r, rides: newRides, maxRides: newMax, payments:[...(r.payments||[]),payment] };
-  if (firebaseReady && db) {
-    set(ref(db, `riders/${id}`), updated);
+  if (DB_READY()) {
+    dbSet(`riders/${id}`, updated);
   } else {
     S.riders[id] = updated;
     renderRiders(); renderWallet();
@@ -952,8 +956,8 @@ window.confirmPay = function() {
 window.removeRider = function() {
   if (!confirm('Are you sure you want to completely remove this rider?')) return;
   const id = S.selectedRider;
-  if (firebaseReady && db) {
-    set(ref(db, `riders/${id}`), null);
+  if (DB_READY()) {
+    dbRemove(`riders/${id}`);
   }
   delete S.riders[id];
   renderRiders(); renderWallet();
@@ -1015,9 +1019,9 @@ window.saveSettings = function() {
   $('avatar-btn').textContent = initials(name);
 
   // Sync driver name to Firebase and update local popup
-  if (isDriver && firebaseReady && db) {
+  if (isDriver && DB_READY()) {
     const busNum = S.user.role.slice(-1);
-    update(ref(db), { [`driverInfo/driver${busNum}/name`]: name });
+    dbUpdateValues({ [`driverInfo/driver${busNum}/name`]: name });
     updateBusPopup(parseInt(busNum));
   }
 
@@ -1096,17 +1100,17 @@ window.doSetup = function() {
   localStorage.setItem('nc_user', JSON.stringify(user));
 
   // Register rider in Firebase
-  if (_role === 'rider' && firebaseReady && db) {
+  if (_role === 'rider' && DB_READY()) {
     const existing = S.riders[id];
     if (!existing) {
-      set(ref(db, `riders/${id}`), { name, phone, stop: stopVal, rides:0, maxRides:5, payments:[], checkedIn:false, busToday:null });
+      dbSet(`riders/${id}`, { name, phone, stop: stopVal, rides:0, maxRides:5, payments:[], checkedIn:false, busToday:null });
     }
   }
 
   // Register driver name in Firebase so bus popup can show it
-  if (_role.startsWith('driver') && firebaseReady && db) {
+  if (_role.startsWith('driver') && DB_READY()) {
     const busNum = _role.slice(-1); // '1' or '2'
-    set(ref(db, `driverInfo/driver${busNum}`), { name, phone, ts: Date.now() });
+    dbSet(`driverInfo/driver${busNum}`, { name, phone, ts: Date.now() });
   }
 
   S.user = user;
@@ -1129,14 +1133,13 @@ function launch() {
   initMap();
   listenBusPositions();
   listenRiders();
+  if (DB_READY()) initDriverInfoListeners();
 
   if (isDriver) {
     listenRiderPositions();
     // Ensure driver's local name is synced to Firebase for riders to see
-    if (firebaseReady && db) {
-      const busNum = u.role.slice(-1);
-      update(ref(db), { [`driverInfo/driver${busNum}/name`]: u.name, [`driverInfo/driver${busNum}/ts`]: Date.now() });
-    }
+    const busNum = u.role.slice(-1);
+    dbUpdateValues({ [`driverInfo/driver${busNum}/name`]: u.name, [`driverInfo/driver${busNum}/ts`]: Date.now() });
   }
 
   if (!isDriver) {
@@ -1156,6 +1159,44 @@ function launch() {
 // ── Boot ──────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   populateSetupStops();
+
+  const bindClick = (id, handler) => {
+    const el = $(id);
+    if (el) el.addEventListener('click', handler);
+  };
+  const bindAllClick = (selector, handler) => {
+    document.querySelectorAll(selector).forEach(el => el.addEventListener('click', handler));
+  };
+
+  bindClick('rt-rider', () => pickRole('rider'));
+  bindClick('rt-driver1', () => pickRole('driver1'));
+  bindClick('rt-driver2', () => pickRole('driver2'));
+  bindClick('btn-join', doSetup);
+  bindClick('btn-hard-refresh', hardRefresh);
+  bindClick('btn-hard-refresh-settings', hardRefresh);
+  bindClick('avatar-btn', openSettings);
+  bindClick('bustab-1', () => selectBus(1));
+  bindClick('bustab-2', () => selectBus(2));
+  bindClick('sp-am', () => selectSlot('am'));
+  bindClick('sp-pm', () => selectSlot('pm'));
+  bindClick('btn-broadcast', toggleBroadcast);
+  bindClick('btn-wa', shareWA);
+  bindClick('btn-end-trip', endTrip);
+  bindClick('btn-checkin', toggleCheckin);
+  bindClick('btn-onboard', toggleOnboard);
+  bindClick('btn-rider-loc', toggleRiderLocation);
+  bindClick('tab-map', () => goTab('map'));
+  bindClick('tab-riders', () => goTab('riders'));
+  bindClick('tab-wallet', () => goTab('wallet'));
+  bindClick('btn-panel-close', () => goTab('map'));
+  bindClick('btn-confirm-pay', confirmPay);
+  bindClick('btn-remove-rider', removeRider);
+  bindClick('btn-save-settings', saveSettings);
+  bindClick('btn-reset-app', resetApp);
+  bindClick('btn-confirm-end-trip', confirmEndTrip);
+  bindClick('btn-cancel-end-trip', closeModal);
+  bindClick('backdrop', closeModal);
+  bindAllClick('.modal-x', closeModal);
 
   const lName = localStorage.getItem('nc_last_name');
   const lPhone = localStorage.getItem('nc_last_phone');
