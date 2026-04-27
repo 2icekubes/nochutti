@@ -25,6 +25,9 @@ export const CONFIG = {
 
   // ── Auto-deduct ride on check-in ─────────
   // Set to true to deduct 1 ride automatically when rider checks in
+  OLA_MAPS_API_KEY: "",
+  OLA_STYLE_URL: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json?key=0.4.0",
+
   AUTO_DEDUCT_ON_CHECKIN: false,
 
   // ── Proximity alert threshold (km) ───────

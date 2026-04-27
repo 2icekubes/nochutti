@@ -98,30 +98,138 @@ function showNotification(text) {
 }
 
 // ── Map ───────────────────────────────────────
-let map, busMarkers = {};
+let map, olaMapsClient, busMarkers = {};
 
-function initMap() {
-  map = L.map('map', { zoomControl:false, attributionControl:false,
-    center: CONFIG.MAP_CENTER, zoom: CONFIG.MAP_ZOOM });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+const DEFAULT_OLA_STYLE_URL = 'https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json?key=0.4.0';
+const toLngLat = (lat, lng) => [lng, lat];
 
-  L.polyline(CONFIG.DEMO_ROUTE, { color: '#4ade80', weight: 4, opacity: 0.8 }).addTo(map);
+function requireOlaMapsSdk() {
+  if (typeof window.OlaMaps !== 'function') {
+    throw new Error('Ola Maps SDK did not load.');
+  }
+  if (!CONFIG.OLA_MAPS_API_KEY) {
+    throw new Error('Set CONFIG.OLA_MAPS_API_KEY in js/config.js.');
+  }
+}
 
-  // Stop markers
-  let stopMarkers = {};
+function createPopup(html) {
+  return new window.OlaMaps.Popup({
+    closeButton: false,
+    closeOnClick: true,
+    maxWidth: '220px',
+    offset: 18,
+  }).setHTML(html);
+}
+
+function createMarker({ lat, lng, html, popupHtml = '', hidden = false }) {
+  const shell = document.createElement('div');
+  shell.innerHTML = html.trim();
+  const element = shell.firstElementChild;
+  const marker = new window.OlaMaps.Marker({ element, anchor: 'center' })
+    .setLngLat(toLngLat(lat, lng))
+    .addTo(map);
+
+  if (hidden) element.style.opacity = '0';
+
+  const wrapped = {
+    marker,
+    element,
+    popup: null,
+    addTo() {
+      this.marker.addTo(map);
+      return this;
+    },
+    bindPopup(htmlContent) {
+      this.popup = createPopup(htmlContent);
+      this.marker.setPopup(this.popup);
+      return this;
+    },
+    openPopup() {
+      if (this.popup && !this.popup.isOpen()) this.marker.togglePopup();
+      return this;
+    },
+    isPopupOpen() {
+      return !!this.popup?.isOpen();
+    },
+    setPopupContent(htmlContent) {
+      if (!this.popup) return this.bindPopup(htmlContent);
+      this.popup.setHTML(htmlContent);
+      return this;
+    },
+    setLatLng(coords) {
+      this.marker.setLngLat(toLngLat(coords[0], coords[1]));
+      return this;
+    },
+    setOpacity(opacity) {
+      this.element.style.opacity = String(opacity);
+      return this;
+    },
+    remove() {
+      this.marker.remove();
+    },
+  };
+
+  if (popupHtml) wrapped.bindPopup(popupHtml);
+  return wrapped;
+}
+
+function addRouteLine() {
+  if (!map || map.getSource('demo-route')) return;
+  map.addSource('demo-route', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: CONFIG.DEMO_ROUTE.map(([lat, lng]) => toLngLat(lat, lng)),
+      },
+      properties: {},
+    },
+  });
+  map.addLayer({
+    id: 'demo-route',
+    type: 'line',
+    source: 'demo-route',
+    paint: {
+      'line-color': '#4ade80',
+      'line-width': 4,
+      'line-opacity': 0.8,
+    },
+  });
+}
+
+function setMapView(lat, lng, zoom = 15) {
+  if (!map) return;
+  map.easeTo({ center: toLngLat(lat, lng), zoom, duration: 0 });
+}
+
+async function initMap() {
+  requireOlaMapsSdk();
+  olaMapsClient = new window.OlaMaps({ apiKey: CONFIG.OLA_MAPS_API_KEY });
+  map = await olaMapsClient.init({
+    style: CONFIG.OLA_STYLE_URL || DEFAULT_OLA_STYLE_URL,
+    container: 'map',
+    center: toLngLat(CONFIG.MAP_CENTER[0], CONFIG.MAP_CENTER[1]),
+    zoom: CONFIG.MAP_ZOOM,
+  });
+
+  if (map.loaded()) addRouteLine();
+  else map.once('load', addRouteLine);
+
+  const stopMarkers = {};
   CONFIG.STOPS.forEach(s => {
-    stopMarkers[s.id] = _makeStopMarker(s, 0).addTo(map);
+    stopMarkers[s.id] = _makeStopMarker(s, 0).addTo();
   });
   window._stopMarkers = stopMarkers;
 
-  // Bus markers for both buses
   [1, 2].forEach(n => {
     const bus = CONFIG.BUSES[n];
-    const icon = L.divIcon({
-      html:`<div id="busmarker-${n}" style="width:38px;height:38px;border-radius:50%;background:#4ade80;border:3px solid #0d1f0f;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 14px rgba(74,222,128,.45)">${bus.emoji}</div>`,
-      iconSize:[38,38], iconAnchor:[19,19], className:''
+    busMarkers[n] = createMarker({
+      lat: CONFIG.MAP_CENTER[0],
+      lng: CONFIG.MAP_CENTER[1],
+      html: `<div id="busmarker-${n}" style="width:38px;height:38px;border-radius:50%;background:#4ade80;border:3px solid #0d1f0f;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 14px rgba(74,222,128,.45)">${bus.emoji}</div>`,
+      hidden: true,
     });
-    busMarkers[n] = L.marker(CONFIG.MAP_CENTER, { icon, opacity: 0 }).addTo(map);
     updateBusPopup(n);
   });
 }
@@ -132,11 +240,11 @@ function _makeStopMarker(s, count) {
   const size = hasRiders ? 14 : 10;
   const bg = hasRiders ? '#4ade80' : '#555';
   const glow = hasRiders ? ';box-shadow:0 0 0 3px rgba(74,222,128,0.4)' : '';
-  const icon = L.divIcon({
+  return createMarker({
+    lat: s.lat,
+    lng: s.lng,
     html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid #0d1f0f${glow}"></div>`,
-    iconSize: [size, size], iconAnchor: [size/2, size/2], className: ''
   });
-  return L.marker([s.lat, s.lng], { icon });
 }
 
 function updateBusPopup(busN) {
@@ -341,7 +449,7 @@ function updateStopPopups(openAll) {
     // Swap marker icon to reflect count (remove old, add new)
     const wasOpen = old.isPopupOpen();
     old.remove();
-    const fresh = _makeStopMarker(s, count).bindPopup(popupHtml).addTo(map);
+    const fresh = _makeStopMarker(s, count).bindPopup(popupHtml).addTo();
     stopMarkers[s.id] = fresh;
     if ((openAll && count > 0) || wasOpen) fresh.openPopup();
   });
@@ -368,15 +476,12 @@ function listenRiderPositions() {
       const popupHtml = `<div style="text-align:center;min-width:90px"><b style="color:var(--t0);font-size:13px">${riderName}</b><br><span style="color:#aaa;font-size:11px">Sharing location</span></div>`;
 
       if (!riderMarkers[id]) {
-        const icon = L.divIcon({
+        riderMarkers[id] = createMarker({
+          lat: pos.lat,
+          lng: pos.lng,
           html: `<div style="width:28px;height:28px;border-radius:50%;background:rgba(96,165,250,0.25);border:1.5px solid rgba(96,165,250,0.7);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#1d4ed8;letter-spacing:0">${av}</div>`,
-          iconSize: [28,28],
-          iconAnchor: [14,14],
-          className: ''
+          popupHtml,
         });
-        riderMarkers[id] = L.marker([pos.lat, pos.lng], { icon })
-          .bindPopup(popupHtml)
-          .addTo(map);
       } else {
         riderMarkers[id].setLatLng([pos.lat, pos.lng]);
         riderMarkers[id].setPopupContent(popupHtml);
@@ -387,7 +492,7 @@ function listenRiderPositions() {
     Object.keys(riderMarkers).forEach(id => {
       const pos = data[id];
       if (!pos || now - pos.ts > STALE_MS) {
-        map.removeLayer(riderMarkers[id]);
+        riderMarkers[id].remove();
         delete riderMarkers[id];
       }
     });
@@ -402,7 +507,7 @@ window.selectBus = function(n) {
   });
   const pos = S.busPositions[n];
   if (pos && Date.now() - pos.ts < 30 * 60 * 1000) { 
-    map.setView([pos.lat, pos.lng], 15); 
+    setMapView(pos.lat, pos.lng, 15); 
     updateETA(pos.lat, pos.lng); 
   }
   else { 
@@ -450,7 +555,7 @@ function startBroadcast() {
   S.watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
     moveBus(busN, lat, lng);
-    map.setView([lat, lng], 15);
+    setMapView(lat, lng, 15);
     dbSet(`bus${busN}/position`, { lat, lng, ts: Date.now() });
   }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
   S.broadcasting = true;
@@ -503,11 +608,29 @@ function startRiderLocation() {
   if (!navigator.geolocation) { toast('Geolocation not available'); return; }
   requestWakeLock();
   const id = S.user.id;
-  const icon = L.divIcon({
+  if (!myMarker) {
+    myMarker = createMarker({
+      lat: CONFIG.MAP_CENTER[0],
+      lng: CONFIG.MAP_CENTER[1],
+      html: '<div style="width:28px;height:28px;border-radius:50%;background:rgba(248,113,113,0.25);border:1.5px solid rgba(248,113,113,0.7);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--red);">📍</div>',
+      hidden: true,
+    });
+  }
+
+  S.riderWatchId = navigator.geolocation.watchPosition(pos => {
+    const { latitude: lat, longitude: lng } = pos.coords;
+    if (myMarker) { myMarker.setLatLng([lat, lng]); myMarker.setOpacity(1); }
+    dbSet(`riderPositions/${id}`, { lat, lng, ts: Date.now() });
+  }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
+  S.riderBroadcasting = true;
+  updateRiderLocationBtn();
+  toast('Location sharing started');
+  return;
+  const icon = ({
     html: `<div style="width:28px;height:28px;border-radius:50%;background:rgba(248,113,113,0.25);border:1.5px solid rgba(248,113,113,0.7);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--red);">📍</div>`,
     iconSize: [28,28], iconAnchor: [14,14], className: ''
   });
-  if (!myMarker) myMarker = L.marker([0,0], { icon, opacity: 0 }).addTo(map);
+  if (!myMarker) myMarker = createMarker({ lat: CONFIG.MAP_CENTER[0], lng: CONFIG.MAP_CENTER[1], html: '<div></div>', hidden: true });
 
   S.riderWatchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
@@ -524,7 +647,7 @@ function stopRiderLocation() {
   S.riderWatchId = null;
   S.riderBroadcasting = false;
   releaseWakeLock();
-  if (myMarker) { map.removeLayer(myMarker); myMarker = null; }
+  if (myMarker) { myMarker.remove(); myMarker = null; }
   dbRemove(`riderPositions/${S.user.id}`);
   updateRiderLocationBtn();
   toast('Location sharing stopped');
@@ -963,7 +1086,7 @@ window.goTab = function(tab) {
   });
   $('panel-riders').classList.toggle('hidden', tab!=='riders');
   $('panel-wallet').classList.toggle('hidden', tab!=='wallet');
-  if (tab==='map') setTimeout(()=>map?.invalidateSize(), 100);
+  if (tab==='map') setTimeout(()=>map?.resize(), 100);
   if (tab==='riders') renderRiders();
   if (tab==='wallet') renderWallet();
 };
@@ -1106,11 +1229,16 @@ window.doSetup = function() {
 
   S.user = user;
   $('screen-setup').classList.add('hidden');
-  launch();
+  launch().catch(handleLaunchError);
 };
 
 // ── Launch ────────────────────────────────────
-function launch() {
+function handleLaunchError(err) {
+  console.error(err);
+  toast(err?.message || 'Unable to start Ola Maps.');
+}
+
+async function launch() {
   const u = S.user;
   $('app').classList.remove('hidden');
   $('avatar-btn').textContent = initials(u.name);
@@ -1121,7 +1249,7 @@ function launch() {
   $('driver-overlay').style.display = isDriver ? 'flex' : 'none';
   $('rider-checkin-overlay').style.display = isDriver ? 'none' : 'flex';
 
-  initMap();
+  await initMap();
   listenBusPositions();
   listenRiders();
   if (DB_READY()) initDriverInfoListeners();
@@ -1200,7 +1328,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const saved = localStorage.getItem('nc_user');
     if (saved) {
-      try { S.user = JSON.parse(saved); launch(); }
+      try { S.user = JSON.parse(saved); launch().catch(handleLaunchError); }
       catch { $('screen-setup').classList.remove('hidden'); }
     } else {
       $('screen-setup').classList.remove('hidden');

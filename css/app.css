@@ -187,11 +187,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .hidden{display:none!important}
 
-/* Leaflet skin overrides */
-.leaflet-container{background:#e5e5e5}
-.leaflet-popup-content-wrapper{background:var(--bg1);color:var(--t0);border:1px solid var(--bdr2);border-radius:var(--rl)!important;box-shadow:0 8px 30px rgba(0,0,0,.6)}
-.leaflet-popup-tip{background:var(--bg1)}
-.leaflet-popup-close-button{color:var(--t2)!important}
+/* Ola Maps / MapLibre skin overrides */
+#map .maplibregl-canvas{outline:none}
+#map .maplibregl-control-container{display:none}
+#map .maplibregl-popup-content{background:var(--bg1);color:var(--t0);border:1px solid var(--bdr2);border-radius:var(--rl);box-shadow:0 8px 30px rgba(0,0,0,.6);padding:10px 12px}
+#map .maplibregl-popup-tip{border-top-color:var(--bg1)!important;border-bottom-color:var(--bg1)!important}
+#map .maplibregl-popup-close-button{color:var(--t2)}
 
 /* IN-APP NOTIFICATION */
 .in-app-notification {
