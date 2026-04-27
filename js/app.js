@@ -173,6 +173,17 @@ function createMarker({ lat, lng, html, popupHtml = '', hidden = false }) {
   return wrapped;
 }
 
+function createBusMarker(busN) {
+  const bus = CONFIG.BUSES[busN];
+  busMarkers[busN] = createMarker({
+    lat: CONFIG.MAP_CENTER[0],
+    lng: CONFIG.MAP_CENTER[1],
+    html: `<div id="busmarker-${busN}" style="width:38px;height:38px;border-radius:50%;background:#4ade80;border:3px solid #0d1f0f;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 14px rgba(74,222,128,.45)">${bus.emoji}</div>`,
+  });
+  updateBusPopup(busN);
+  return busMarkers[busN];
+}
+
 function addRouteLine() {
   if (!map || map.getSource('demo-route')) return;
   map.addSource('demo-route', {
@@ -223,14 +234,7 @@ async function initMap() {
   window._stopMarkers = stopMarkers;
 
   [1, 2].forEach(n => {
-    const bus = CONFIG.BUSES[n];
-    busMarkers[n] = createMarker({
-      lat: CONFIG.MAP_CENTER[0],
-      lng: CONFIG.MAP_CENTER[1],
-      html: `<div id="busmarker-${n}" style="width:38px;height:38px;border-radius:50%;background:#4ade80;border:3px solid #0d1f0f;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 14px rgba(74,222,128,.45)">${bus.emoji}</div>`,
-      hidden: true,
-    });
-    updateBusPopup(n);
+    busMarkers[n] = null;
   });
 }
 
@@ -267,9 +271,8 @@ function updateBusPopup(busN) {
 }
 
 function moveBus(busN, lat, lng) {
-  if (!busMarkers[busN]) return;
+  if (!busMarkers[busN]) createBusMarker(busN);
   busMarkers[busN].setLatLng([lat, lng]);
-  busMarkers[busN].setOpacity(1);
   S.busPositions[busN] = { lat, lng, ts: Date.now() };
   updateStatusBadges();
   if (busN === S.bus) updateETA(lat, lng);
@@ -282,7 +285,10 @@ function moveBus(busN, lat, lng) {
 }
 
 function hideBus(busN) {
-  if (busMarkers[busN]) busMarkers[busN].setOpacity(0);
+  if (busMarkers[busN]) {
+    busMarkers[busN].remove();
+    busMarkers[busN] = null;
+  }
   delete S.busPositions[busN];
   updateStatusBadges();
   if (S.bus === busN) {
