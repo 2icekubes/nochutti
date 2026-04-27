@@ -458,13 +458,25 @@ function startBroadcast() {
   const busN = parseInt(S.user.role.slice(-1));
   S.watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
+    const wasBroadcasting = S.broadcasting;
+    if (!wasBroadcasting) {
+      S.broadcasting = true;
+      updateBroadcastBtn();
+      updateStopPopups(true); // open stop popups with rider counts on trip start
+      toast(`Broadcasting Bus ${busN} location`);
+    }
     moveBus(busN, lat, lng);
     map.setView([lat, lng], 15);
     dbSet(`bus${busN}/position`, { lat, lng, ts: Date.now() });
-  }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
-  S.broadcasting = true;
-  updateBroadcastBtn();
-  updateStopPopups(true); // open stop popups with rider counts on trip start
+  }, err => {
+    if (S.watchId && !S.broadcasting) {
+      navigator.geolocation.clearWatch(S.watchId);
+      S.watchId = null;
+      releaseWakeLock();
+    }
+    toast('GPS: ' + err.message);
+  }, { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
+  return;
   toast(`📡 Broadcasting Bus ${busN} location`);
 }
 
@@ -520,9 +532,24 @@ function startRiderLocation() {
 
   S.riderWatchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
+    const wasBroadcasting = S.riderBroadcasting;
+    if (!wasBroadcasting) {
+      S.riderBroadcasting = true;
+      updateRiderLocationBtn();
+      toast('Location sharing started');
+    }
     if (myMarker) { myMarker.setLatLng([lat, lng]); myMarker.setOpacity(1); }
     dbSet(`riderPositions/${id}`, { lat, lng, ts: Date.now() });
-  }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
+  }, err => {
+    if (S.riderWatchId && !S.riderBroadcasting) {
+      navigator.geolocation.clearWatch(S.riderWatchId);
+      S.riderWatchId = null;
+      releaseWakeLock();
+      if (myMarker) { map.removeLayer(myMarker); myMarker = null; }
+    }
+    toast('GPS: ' + err.message);
+  }, { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
+  return;
   S.riderBroadcasting = true;
   updateRiderLocationBtn();
   toast('Location sharing started');
@@ -577,7 +604,11 @@ window.confirmEndTrip = function() {
       .catch(err => toast('Error: ' + err.message));
   } else {
     Object.entries(S.riders).forEach(([id, r]) => {
-      if (r.checkedIn && r.busToday === busN) { S.riders[id].checkedIn = false; S.riders[id].busToday = null; }
+      if (r.checkedIn && r.busToday === busN) {
+        S.riders[id].checkedIn = false;
+        S.riders[id].busToday = null;
+        S.riders[id].onboarded = false;
+      }
     });
     renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn();
     toast(`Trip ended. Offboarded ${count} passengers.`);
@@ -590,14 +621,15 @@ window.toggleCheckin = function() {
   const rider = S.riders[id];
   const alreadyIn = rider?.checkedIn;
   const newStatus = !alreadyIn;
-  const busAssigned = newStatus ? S.bus : null;
+  const activeBus = alreadyIn ? rider?.busToday : S.bus;
+  const busAssigned = newStatus ? activeBus : null;
 
-  if (!newStatus && S.busPositions[S.bus]) {
-    const pos = S.busPositions[S.bus];
+  if (!newStatus && activeBus && S.busPositions[activeBus]) {
+    const pos = S.busPositions[activeBus];
     const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) || CONFIG.STOPS.find(s => s.name === S.user?.stop);
     if (stop) {
       const d = Math.sqrt(Math.pow((pos.lat-stop.lat)*111,2)+Math.pow((pos.lng-stop.lng)*111,2));
-      const approachKey = `bus${S.bus}_approach_${today()}`;
+      const approachKey = `bus${activeBus}_approach_${today()}`;
       if (S.notifiedEvents.includes(approachKey) && d > 2.0) {
         toast(`Check-out locked: Bus has already departed (> 2km away)`);
         return;
@@ -650,6 +682,16 @@ window.toggleOnboard = function() {
   if (!rider?.checkedIn) return;
   
   const isNowOnboard = !rider.onboarded;
+  if (isNowOnboard) {
+    toast(`Onboarded Bus ${rider.busToday}`);
+  } else {
+    toast(`Offboarded Bus ${rider.busToday}`);
+  }
+
+  const updatedRider = { ...S.riders[id], onboarded: isNowOnboard };
+  if (DB_READY()) dbSet(`riders/${id}`, updatedRider);
+  else { S.riders[id] = updatedRider; updateCheckinBtn(); }
+  return;
   
   if (isNowOnboard && CONFIG.AUTO_DEDUCT_ON_CHECKIN && !rider.onboarded) {
     if ((rider.rides || 0) > 0) {
@@ -709,6 +751,22 @@ function updateOccupancy() {
   const cap2 = CONFIG.BUSES[2].capacity;
   if ($('occ1-cap')) $('occ1-cap').textContent = `/ ${cap1} seats`;
   if ($('occ2-cap')) $('occ2-cap').textContent = `/ ${cap2} seats`;
+}
+
+function renderPaymentPackOptions() {
+  const grid = $('pack-grid');
+  if (!grid) return;
+
+  const configPacks = CONFIG.PACKS.map(p => `
+    <div class="pack${p.best ? ' best' : ''}" onclick="pickPack(${p.rides},${p.amount},this)">
+      ${p.best ? '<div class="pack-badge">Best</div>' : ''}
+      <div class="pack-r">${p.rides} rides</div><div class="pack-p">₹${p.amount.toLocaleString('en-IN')}</div>
+    </div>`).join('');
+
+  grid.innerHTML = `${configPacks}
+    <div class="pack" onclick="pickPack(0,0,this,'custom')">
+      <div class="pack-r">Custom</div><div class="pack-p">₹ -</div>
+    </div>`;
 }
 
 // Sort/filter state for rider panel (driver only)
@@ -1159,6 +1217,7 @@ function launch() {
 // ── Boot ──────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   populateSetupStops();
+  renderPaymentPackOptions();
 
   const bindClick = (id, handler) => {
     const el = $(id);
