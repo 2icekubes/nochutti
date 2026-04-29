@@ -444,8 +444,10 @@ async function initMap() {
     zoom: CONFIG.MAP_ZOOM,
   });
 
-  if (map.loaded()) addRouteLine();
-  else map.once('load', addRouteLine);
+  if (S.user?.role?.startsWith('driver')) {
+    if (map.loaded()) addRouteLine();
+    else map.once('load', addRouteLine);
+  }
 
   window._stopMarkers = {};
   renderStopMarkers();
