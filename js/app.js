@@ -268,6 +268,13 @@ function isRiderBookedForStop(rider, stop, slot = S.slot, busN = null) {
   return stopMatchesValue(stop, getRiderBookedStop(rider, slot));
 }
 
+function isRiderRecord(id, rider) {
+  if (!rider) return false;
+  if (rider.role?.startsWith?.('driver')) return false;
+  if (id?.startsWith?.('driver')) return false;
+  return true;
+}
+
 
 function getStopOrderMap(slot = S.slot) {
   const order = {};
@@ -752,8 +759,8 @@ function updateStopPopups(openAll) {
   stopsToRender.forEach(s => {
     const old = stopMarkers[s.id];
 
-    const count = Object.values(S.riders).filter(r =>
-      isRiderBookedForStop(r, s, S.slot, busN)
+    const count = Object.entries(S.riders).filter(([id, r]) =>
+      isRiderRecord(id, r) && isRiderBookedForStop(r, s, S.slot, busN)
     ).length;
 
     const popupHtml = `
