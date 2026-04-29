@@ -1990,12 +1990,15 @@ function handleLaunchError(err) {
 
 async function launch() {
   const u = S.user;
+  const isDriver = u.role.startsWith('driver');
+  if (isDriver) {
+    S.bus = parseInt(u.role.slice(-1)) || 1;
+  }
   $('app').classList.remove('hidden');
   $('avatar-btn').textContent = initials(u.name);
   updateTopbarCtx();
 
   // Show correct overlays
-  const isDriver = u.role.startsWith('driver');
   $('driver-overlay').style.display = isDriver ? 'flex' : 'none';
   $('rider-checkin-overlay').style.display = isDriver ? 'none' : 'flex';
   $('btn-rider-loc-top')?.classList.toggle('hidden', isDriver);
@@ -2009,6 +2012,8 @@ async function launch() {
   if (isDriver) {
     const busTab1 = $('bustab-1');
     const busTab2 = $('bustab-2');
+    busTab1?.classList.toggle('active', S.bus === 1);
+    busTab2?.classList.toggle('active', S.bus === 2);
     if (u.role === 'driver1') { if (busTab2) busTab2.style.display = 'none'; }
     if (u.role === 'driver2') { if (busTab1) busTab1.style.display = 'none'; }
   }
