@@ -49,6 +49,65 @@ function initDriverInfoListeners() {
   });
 }
 
+// Prompt driver with nearby riders to onboard
+function promptDriverOnboard(riderIds) {
+  if (!riderIds || !riderIds.length) return;
+  const listEl = $('onboard-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  riderIds.forEach(id => {
+    const r = S.riders[id];
+    if (!r) return;
+    const item = document.createElement('div');
+    item.style.display = 'flex'; item.style.justifyContent = 'space-between'; item.style.alignItems = 'center';
+    item.innerHTML = `<div><strong>${r.name}</strong><div style="font-size:12px;color:var(--t2)">${getRiderRouteLabel(r)}</div></div>`;
+    const btn = document.createElement('button');
+    btn.className = 'btn-primary'; btn.style.marginLeft = '8px'; btn.textContent = 'Onboard';
+    btn.onclick = () => confirmDriverOnboard(id);
+    item.appendChild(btn);
+    listEl.appendChild(item);
+  });
+  window.openModal('modal-onboard');
+}
+
+function confirmDriverOnboard(id) {
+  window.closeModal();
+  const r = S.riders[id];
+  if (!r) return;
+  const updated = { ...r, onboarded: true };
+  if (DB_READY()) dbSet(`riders/${id}`, updated);
+  else { S.riders[id] = updated; renderRiders(); updateOccupancy(); }
+  toast(`Onboarded ${r.name}`);
+}
+
+// Auto-deboard riders when bus reaches their drop stop
+function checkAutoDeboard(busN, lat, lng) {
+  const toProcess = [];
+  Object.entries(S.riders).forEach(([id, r]) => {
+    if (!r.onboarded) return;
+    if (r.busToday !== busN) return;
+    const drop = getRiderDropStop(r);
+    const stop = findStopByValue(drop, S.slot);
+    if (!stop) return;
+    const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
+    if (d < (CONFIG.AUTO_DEBOARD_KM || 0.05)) toProcess.push(id);
+  });
+  if (!toProcess.length) return;
+  const updates = {};
+  toProcess.forEach(id => {
+    updates[`riders/${id}/checkedIn`] = false;
+    updates[`riders/${id}/busToday`] = null;
+    updates[`riders/${id}/onboarded`] = false;
+  });
+  if (DB_READY()) dbUpdateValues(updates).then(() => {
+    toast(`Auto-deboarded ${toProcess.length} rider${toProcess.length>1?'s':''}`);
+  }).catch(err => console.warn('auto-deboard error', err));
+  if (!DB_READY()) {
+    toProcess.forEach(id => { S.riders[id].checkedIn = false; S.riders[id].busToday = null; S.riders[id].onboarded = false; });
+    renderRiders(); updateOccupancy(); updateCheckinBtn();
+  }
+}
+
 // ── Demo riders ───────────────────────────────
 const DEMO_RIDERS = {
   r001: { name:'Rahul Roy',      stop:'Sector 5',    rides:3, maxRides:5,  payments:[], checkedIn: true,  busToday:1 },
@@ -426,6 +485,8 @@ function moveBus(busN, lat, lng) {
   updateStatusBadges();
   if (busN === S.bus) updateETA(lat, lng);
   checkProximity(busN, lat, lng);
+  // After proximity checks, run auto-deboard for any onboarded riders
+  checkAutoDeboard(busN, lat, lng);
 
   // Pulse the bus marker icon if this driver is broadcasting
   const isMyBus = S.user?.role === `driver${busN}` && S.broadcasting;
@@ -447,7 +508,27 @@ function hideBus(busN) {
 }
 
 function checkProximity(busN, lat, lng) {
-  if (S.user?.role?.startsWith('driver')) return;
+  // Driver-specific proximity: prompt to onboard riders when bus nears boarding stop
+  if (S.user?.role?.startsWith('driver')) {
+    // Only consider riders assigned to this bus
+    const nearby = [];
+    Object.entries(S.riders).forEach(([id, r]) => {
+      if (!r.checkedIn || r.onboarded) return;
+      if (r.busToday !== busN) return;
+      const targetStopValue = getRiderActiveStop(r, S.slot);
+      const stop = findStopByValue(targetStopValue, S.slot);
+      if (!stop) return;
+      const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
+      if (d < (CONFIG.ONBOARD_PROXIMITY_KM || 0.2)) nearby.push({ id, rider: r, stop, d });
+    });
+    if (nearby.length) {
+      // show onboard prompt for nearby riders (grouped)
+      promptDriverOnboard(nearby.map(x => x.id));
+    }
+    return;
+  }
+
+  // Rider-facing proximity (existing behaviour)
   if (busN !== S.bus) return;
 
   const targetStopValue = getRiderActiveStop(S.user);
@@ -715,7 +796,7 @@ function updateTopbarCtx() {
 
 // ── GPS Broadcast ─────────────────────────────
 window.toggleBroadcast = function() {
-  S.broadcasting ? stopBroadcast() : startBroadcast();
+  S.broadcasting ? confirmEndTrip() : startBroadcast();
 };
 
 let wakeLock = null;
@@ -761,8 +842,9 @@ function updateBroadcastBtn() {
   if (!btn) return;
   if (S.broadcasting) {
     btn.classList.add('live');
-    $('bc-label').textContent = 'Broadcasting… tap to stop';
-    $('bc-icon').textContent = '🔴';
+    // When broadcasting, the same button becomes the trip end control
+    $('bc-label').textContent = 'End trip';
+    $('bc-icon').textContent = '🛑';
   } else {
     btn.classList.remove('live');
     $('bc-label').textContent = 'Start Trip and Broadcast Location';
@@ -969,11 +1051,27 @@ window.toggleOnboard = function() {
 function updateCheckinBtn() {
   const btn = $('btn-checkin');
   const btnOb = $('btn-onboard');
-  if (!btn) return;
+  if (!btn && !btnOb) return;
   const rider = S.riders[S.user?.id];
+  const isDriver = S.user?.role?.startsWith('driver');
+
+  if (isDriver) {
+    // Driver view: hide checkin button, show onboard control if a ride exists
+    if (btn) btn.style.display = 'none';
+    if (!btnOb) return;
+    const ride = getRideForSlot(rider, S.slot);
+    const isOb = rider?.onboarded;
+    btnOb.style.display = ride ? 'flex' : 'none';
+    btnOb.classList.toggle('checked-in', !!isOb);
+    $('ob-icon').textContent = isOb ? '✓' : '🚌';
+    $('ob-label').textContent = isOb ? `Onboarded Bus ${ride?.bus || S.bus}` : `Onboard Bus ${ride?.bus || S.bus}`;
+    return;
+  }
+
+  // Rider view
+  if (!btn) return;
   const isIn = rider?.checkedIn;
   const isOb = rider?.onboarded;
-  
   btn.classList.toggle('checked-in', !!isIn);
   $('ci-icon').textContent = isIn ? '✓' : '○';
   $('ci-label').textContent = isIn
@@ -1016,6 +1114,19 @@ window.toggleOnboard = function() {
   } else if (isNowOnboard) {
     toast(`Onboarded Bus ${busAssigned}`);
   } else {
+    // Prevent riders from deboarding manually unless bus is at their drop stop
+    if (S.user?.role && !S.user.role.startsWith('driver')) {
+      const pos = S.busPositions[busAssigned];
+      const drop = ride.drop || getRiderDropStop(rider);
+      const stop = findStopByValue(drop, S.slot);
+      if (stop && pos) {
+        const d = Math.sqrt(Math.pow((pos.lat - stop.lat) * 111, 2) + Math.pow((pos.lng - stop.lng) * 111, 2));
+        if (d > (CONFIG.AUTO_DEBOARD_KM || 0.05)) {
+          toast('Cannot deboard until bus reaches your destination');
+          return;
+        }
+      }
+    }
     toast(`Offboarded Bus ${busAssigned}`);
   }
 
@@ -1035,21 +1146,7 @@ window.toggleOnboard = function() {
   }
 };
 
-function updateCheckinBtn() {
-  const btn = $('btn-checkin');
-  const btnOb = $('btn-onboard');
-  const rider = S.riders[S.user?.id];
-  const ride = getRideForSlot(rider, S.slot);
-  const isOb = rider?.onboarded;
 
-  if (btn) btn.style.display = 'none';
-  if (!btnOb) return;
-
-  btnOb.style.display = ride ? 'flex' : 'none';
-  btnOb.classList.toggle('checked-in', !!isOb);
-  $('ob-icon').textContent = isOb ? '✓' : '🚌';
-  $('ob-label').textContent = isOb ? `Onboarded Bus ${ride?.bus || S.bus}` : `Onboard Bus ${ride?.bus || S.bus}`;
-}
 
 function updateOccupancy() {
   const riders = Object.values(S.riders);
@@ -1734,10 +1831,18 @@ async function launch() {
   $('rider-checkin-overlay').style.display = isDriver ? 'none' : 'flex';
   $('btn-rider-loc-top')?.classList.toggle('hidden', isDriver);
   if ($('tab-myride')) $('tab-myride').style.display = isDriver ? 'none' : 'flex';
-  if ($('topbar-ctx')) $('topbar-ctx').style.display = isDriver ? 'block' : 'none';
+  // hide the topbar context for drivers (not required next to wordmark)
+  if ($('topbar-ctx')) $('topbar-ctx').style.display = isDriver ? 'none' : 'block';
   if ($('bus-bar')) $('bus-bar').style.display = isDriver ? 'flex' : 'none';
   const busBadges = document.querySelector('.bus-badges');
   if (busBadges) busBadges.style.display = isDriver ? 'flex' : 'none';
+  // If driver logged in for a particular bus, hide the other bus tab
+  if (isDriver) {
+    const busTab1 = $('bustab-1');
+    const busTab2 = $('bustab-2');
+    if (u.role === 'driver1') { if (busTab2) busTab2.style.display = 'none'; }
+    if (u.role === 'driver2') { if (busTab1) busTab1.style.display = 'none'; }
+  }
 
   await initMap();
   listenBusPositions();
@@ -1793,7 +1898,6 @@ window.addEventListener('DOMContentLoaded', () => {
   bindClick('sp-pm', () => window.selectSlot('pm'));
   bindClick('btn-broadcast', window.toggleBroadcast);
   bindClick('btn-wa', window.shareWA);
-  bindClick('btn-end-trip', window.endTrip);
   bindClick('btn-checkin', window.toggleCheckin);
   bindClick('btn-onboard', window.toggleOnboard);
   bindClick('tab-map', () => window.goTab('map'));

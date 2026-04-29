@@ -34,6 +34,15 @@ export const CONFIG = {
   // Notification fires when bus is within this distance of rider's stop
   PROXIMITY_ALERT_KM: 1.0,
 
+  // ── Driver onboard / auto-deboard thresholds (km) ─
+  // When driver/bus is within this distance of a rider's boarding stop,
+  // the app will prompt the driver to onboard the rider.
+  ONBOARD_PROXIMITY_KM: 0.2,
+
+  // When driver/bus is within this distance of a rider's drop stop,
+  // the rider will be auto-deboarded.
+  AUTO_DEBOARD_KM: 0.05,
+
   // ── First stop proximity for "started" ───
   // "Bus started" notification only fires if bus is within this km of first stop
   ROUTE_START_RADIUS_KM: 2.0,

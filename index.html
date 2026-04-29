@@ -128,7 +128,6 @@
         <span id="bc-icon">📡</span> <span id="bc-label">Start Trip and Broadcast Location</span>
       </button>
       <button type="button" class="btn-wa" id="btn-wa">💬 Share on WhatsApp</button>
-      <button type="button" class="btn-ghost" id="btn-end-trip" style="margin-top:8px; width:100%; color:var(--red); border-color:var(--red2);">🛑 End trip</button>
     </div>
 
     <div class="map-bottom-overlay" id="rider-checkin-overlay" style="display:none; align-items:flex-end; gap:8px;">
@@ -193,6 +192,18 @@
 </div>
 
 <div id="backdrop" class="backdrop hidden"></div>
+
+<div id="modal-onboard" class="modal hidden">
+  <div class="modal-handle"></div>
+  <div class="modal-head">
+    <div class="modal-title">Onboard riders</div>
+    <button type="button" class="modal-x">✕</button>
+  </div>
+  <div class="modal-body">
+    <div id="onboard-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div style="margin-top:12px;font-size:13px;color:var(--t2)">Tap a rider to mark them onboarded.</div>
+  </div>
+</div>
 
 <div id="modal-pay" class="modal hidden">
   <div class="modal-handle"></div>
