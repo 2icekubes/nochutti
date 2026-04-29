@@ -99,6 +99,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 .btn-wa{display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:var(--rl);border:none;font-family:var(--ff);font-size:14px;font-weight:500;background:var(--wa);color:#fff;cursor:pointer}
 .btn-checkin{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:var(--rl);border:none;font-family:var(--fh);font-size:15px;font-weight:700;background:var(--grn);color:#0d1f0f;cursor:pointer;transition:all .2s}
 .btn-checkin.checked-in{background:var(--bg3);color:var(--grn);border:1px solid var(--grn)}
+#btn-checkin{display:none!important}
 
 /* TABBAR */
 .tabbar{display:flex;background:var(--bg1);border-top:1px solid var(--bdr);flex-shrink:0;padding:4px 0;position:relative;z-index:20}

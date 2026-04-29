@@ -72,8 +72,8 @@ export const CONFIG = {
 
   // ── Time slots ───────────────────────────
   SLOTS: {
-    am: { label: "7:30 am", time: "08:30" },
-    pm: { label: "6:20 pm", time: "06:50" },
+    am: { times: { 1: "07:30", 2: "08:00" } },
+    pm: { times: { 1: "18:20", 2: "18:50" } },
   },
 
   // ── Bus names ────────────────────────────

@@ -483,7 +483,7 @@ function updateETA(lat, lng) {
 
   if (S.user?.role?.startsWith('driver')) {
     const isBroadcastingThisBus = S.broadcasting && parseInt(S.user.role.slice(-1)) === S.bus;
-    el.textContent = isBroadcastingThisBus ? `Broadcasting Bus ${S.bus}` : `Bus ${S.bus} · ${CONFIG.SLOTS[S.slot].label}`;
+    el.textContent = isBroadcastingThisBus ? `Broadcasting Bus ${S.bus}` : `Bus ${S.bus} · ${getSlotBusLabel(S.slot, S.bus)}`;
     return;
   }
 
@@ -683,6 +683,8 @@ window.selectBus = function(n) {
   [1,2].forEach(i => {
     $(`bustab-${i}`).classList.toggle('active', i===n);
   });
+  updateTopbarCtx();
+  updateCheckinBtn();
   const pos = S.busPositions[n];
   if (pos && Date.now() - pos.ts < 30 * 60 * 1000) { 
     setMapView(pos.lat, pos.lng, 15); 
@@ -697,8 +699,8 @@ window.selectSlot = function(slot) {
   S.slot = slot;
   $('sp-am').classList.toggle('active', slot==='am');
   $('sp-pm').classList.toggle('active', slot==='pm');
-  $('bustab-1-sub').textContent = CONFIG.SLOTS[slot].label;
-  $('bustab-2-sub').textContent = CONFIG.SLOTS[slot].label;
+  $('bustab-1-sub').textContent = getSlotBusLabel(slot, 1);
+  $('bustab-2-sub').textContent = getSlotBusLabel(slot, 2);
   renderStopMarkers();
   updateTopbarCtx();
   updateCheckinBtn();
@@ -708,7 +710,7 @@ window.selectSlot = function(slot) {
 function updateTopbarCtx() {
   const role = S.user?.role || '';
   const tag = role.startsWith('driver') ? `Driver · Bus ${role.slice(-1)}` : 'Rider';
-  $('topbar-ctx').textContent = `${tag} · ${CONFIG.SLOTS[S.slot].label}`;
+  $('topbar-ctx').textContent = `${tag} · ${getSlotBusLabel(S.slot, S.bus)}`;
 }
 
 // ── GPS Broadcast ─────────────────────────────
@@ -770,7 +772,7 @@ function updateBroadcastBtn() {
 
 window.shareWA = function() {
   const busN = parseInt(S.user.role.slice(-1));
-  const slot = CONFIG.SLOTS[S.slot].label;
+  const slot = getSlotBusLabel(S.slot, busN);
   const msg = encodeURIComponent(
     `🚌 NoChutti — Bus ${busN} is running!\n` +
     `Slot: ${slot}\n` +
@@ -990,6 +992,65 @@ function updateCheckinBtn() {
   }
 }
 
+window.toggleOnboard = function() {
+  const id = S.user.id;
+  const rider = S.riders[id];
+  const ride = getRideForSlot(rider, S.slot);
+  if (!ride) {
+    toast(`Book your ${S.slot.toUpperCase()} ride in MyRide first`);
+    return;
+  }
+  const busAssigned = ride.bus || S.bus || 1;
+  window.selectBus(busAssigned);
+
+  const isNowOnboard = !rider?.onboarded;
+  let nextRides = rider?.rides || 0;
+
+  if (isNowOnboard && CONFIG.AUTO_DEDUCT_ON_CHECKIN && !rider?.onboarded) {
+    if (nextRides > 0) {
+      nextRides -= 1;
+      toast(`Onboarded Bus ${busAssigned} · 1 ride deducted`);
+    } else {
+      toast(`No rides left. Please pay driver.`);
+    }
+  } else if (isNowOnboard) {
+    toast(`Onboarded Bus ${busAssigned}`);
+  } else {
+    toast(`Offboarded Bus ${busAssigned}`);
+  }
+
+  const updated = buildRiderRecord(S.riders[id] || {}, {
+    rides: nextRides,
+    checkedIn: isNowOnboard,
+    busToday: isNowOnboard ? busAssigned : null,
+    onboarded: isNowOnboard,
+    lastCheckin: isNowOnboard ? today() : S.riders[id]?.lastCheckin || null
+  });
+  if (DB_READY()) {
+    dbSet(`riders/${id}`, updated);
+  } else {
+    S.riders[id] = updated;
+    updateCheckinBtn();
+    updateOccupancy();
+  }
+};
+
+function updateCheckinBtn() {
+  const btn = $('btn-checkin');
+  const btnOb = $('btn-onboard');
+  const rider = S.riders[S.user?.id];
+  const ride = getRideForSlot(rider, S.slot);
+  const isOb = rider?.onboarded;
+
+  if (btn) btn.style.display = 'none';
+  if (!btnOb) return;
+
+  btnOb.style.display = ride ? 'flex' : 'none';
+  btnOb.classList.toggle('checked-in', !!isOb);
+  $('ob-icon').textContent = isOb ? '✓' : '🚌';
+  $('ob-label').textContent = isOb ? `Onboarded Bus ${ride?.bus || S.bus}` : `Onboard Bus ${ride?.bus || S.bus}`;
+}
+
 function updateOccupancy() {
   const riders = Object.values(S.riders);
   const c1 = riders.filter(r=>r.checkedIn && r.busToday===1).length;
@@ -1194,14 +1255,21 @@ function getSlotRideDateLabel(slot = S.slot) {
   return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
 }
 
-function formatRideTime(timeValue, slot = S.slot) {
+function formatRideTime(timeValue) {
   if (!timeValue) return '';
   const [rawHours, rawMinutes] = timeValue.split(':').map(Number);
-  let hours = rawHours;
-  if (slot === 'pm' && hours < 12) hours += 12;
+  const hours = rawHours;
   const period = hours >= 12 ? 'pm' : 'am';
   const displayHour = ((hours + 11) % 12) + 1;
   return `${displayHour}:${String(rawMinutes).padStart(2, '0')} ${period}`;
+}
+
+function getSlotBusTime(slot = S.slot, bus = S.bus) {
+  return CONFIG.SLOTS[slot]?.times?.[bus] || CONFIG.SLOTS[slot]?.times?.[1] || '';
+}
+
+function getSlotBusLabel(slot = S.slot, bus = S.bus) {
+  return formatRideTime(getSlotBusTime(slot, bus));
 }
 
 function populateMyRideSelectors() {
@@ -1218,8 +1286,9 @@ function renderMyRide() {
   const el = $('myride-inner');
   if (!el || S.user?.role?.startsWith('driver')) return;
   const ride = getCurrentRide();
-  const slotLabel = CONFIG.SLOTS[S.slot].label;
   const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '', bus: 1 };
+  const rideBus = ride?.bus || draft.bus || 1;
+  const slotLabel = getSlotBusLabel(S.slot, rideBus);
   el.innerHTML = `
     <div class="myride-shell">
       <div class="panel-titlerow">
@@ -1267,7 +1336,7 @@ function renderMyRide() {
                   <div class="myride-ride-stop">${ride.pickup}</div>
                 </div>
                 <div class="myride-route-row">
-                  <div class="myride-time drop">${formatRideTime(CONFIG.SLOTS[S.slot].time, S.slot)}</div>
+                  <div class="myride-time drop">Bus ${rideBus}</div>
                   <span class="myride-dot drop"></span>
                   <div class="myride-ride-stop">${ride.drop}</div>
                 </div>
@@ -1315,16 +1384,28 @@ window.saveMyRide = function() {
     return;
   }
   const savedRides = normalizeSavedRides(rider);
-  savedRides[S.slot] = { slot: S.slot, pickup: draft.pickup, drop: draft.drop, bus: draft.bus === 2 ? 2 : 1, savedAt: new Date().toISOString() };
-  const updated = buildRiderRecord(rider, { name: S.user.name, phone: S.user.phone, savedRides });
+  const selectedBus = draft.bus === 2 ? 2 : 1;
+  savedRides[S.slot] = { slot: S.slot, pickup: draft.pickup, drop: draft.drop, bus: selectedBus, savedAt: new Date().toISOString() };
+  const updated = buildRiderRecord(rider, {
+    name: S.user.name,
+    phone: S.user.phone,
+    savedRides,
+    checkedIn: true,
+    busToday: selectedBus,
+    onboarded: false,
+    lastCheckin: today()
+  });
   S.riders[S.user.id] = updated;
-  S.user = buildRiderRecord(S.user, { savedRides });
+  S.user = buildRiderRecord(S.user, { savedRides, checkedIn: true, busToday: selectedBus, onboarded: false, lastCheckin: today() });
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
+  window.selectBus(selectedBus);
   renderMyRide();
   renderRiders();
   updateETA(S.busPositions[S.bus]?.lat || CONFIG.MAP_CENTER[0], S.busPositions[S.bus]?.lng || CONFIG.MAP_CENTER[1]);
-  toast('Ride saved');
+  updateCheckinBtn();
+  updateOccupancy();
+  toast('Ride booked');
 };
 
 window.openManageRide = function(slot) {
@@ -1355,13 +1436,20 @@ window.manageRideCancel = function() {
   const savedRides = normalizeSavedRides(rider);
   savedRides[S.myRideManageSlot] = null;
   S.myRideDraft[S.myRideManageSlot] = { pickup: '', drop: '', bus: S.bus };
-  const updated = buildRiderRecord(rider, { savedRides });
+  const updated = buildRiderRecord(rider, {
+    savedRides,
+    checkedIn: false,
+    busToday: null,
+    onboarded: false
+  });
   S.riders[S.user.id] = updated;
-  S.user = buildRiderRecord(S.user, { savedRides });
+  S.user = buildRiderRecord(S.user, { savedRides, checkedIn: false, busToday: null, onboarded: false });
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
   window.closeModal();
   renderMyRide();
+  updateCheckinBtn();
+  updateOccupancy();
   toast('Ride cancelled');
 };
 
