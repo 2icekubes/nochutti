@@ -1169,10 +1169,17 @@ function renderDriverWallet(el) {
 }
 
 function getSlotRideDateLabel(slot = S.slot) {
-  const now = new Date();
-  const next = new Date(now);
-  next.setDate(now.getDate() + 1);
-  return next.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+  return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+function formatRideTime(timeValue, slot = S.slot) {
+  if (!timeValue) return '';
+  const [rawHours, rawMinutes] = timeValue.split(':').map(Number);
+  let hours = rawHours;
+  if (slot === 'pm' && hours < 12) hours += 12;
+  const period = hours >= 12 ? 'pm' : 'am';
+  const displayHour = ((hours + 11) % 12) + 1;
+  return `${displayHour}:${String(rawMinutes).padStart(2, '0')} ${period}`;
 }
 
 function populateMyRideSelectors() {
@@ -1228,9 +1235,9 @@ function renderMyRide() {
             <div class="myride-ride-main">
               <div class="myride-date">${getSlotRideDateLabel(S.slot)}</div>
               <div class="myride-ride-route">
-                <div>
-                  <div class="myride-time">${slotLabel}</div>
-                  <div class="myride-time" style="opacity:.72;margin-top:18px">${CONFIG.SLOTS[S.slot].time}</div>
+                <div class="myride-time-col">
+                  <div class="myride-time pickup">${slotLabel}</div>
+                  <div class="myride-time drop">${formatRideTime(CONFIG.SLOTS[S.slot].time, S.slot)}</div>
                 </div>
                 <div class="myride-mini-dots">
                   <span class="myride-dot pickup"></span>
@@ -1626,6 +1633,10 @@ async function launch() {
   $('rider-checkin-overlay').style.display = isDriver ? 'none' : 'flex';
   $('btn-rider-loc-top')?.classList.toggle('hidden', isDriver);
   if ($('tab-myride')) $('tab-myride').style.display = isDriver ? 'none' : 'flex';
+  if ($('topbar-ctx')) $('topbar-ctx').style.display = isDriver ? 'block' : 'none';
+  if ($('bus-bar')) $('bus-bar').style.display = isDriver ? 'flex' : 'none';
+  const busBadges = document.querySelector('.bus-badges');
+  if (busBadges) busBadges.style.display = isDriver ? 'flex' : 'none';
 
   await initMap();
   listenBusPositions();
