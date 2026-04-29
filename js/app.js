@@ -27,7 +27,7 @@ const S = {
   demoInterval: null,
   notifiedEvents: [],
   driverInfo: { 1: null, 2: null },
-  myRideDraft: { am: { pickup: '', drop: '' }, pm: { pickup: '', drop: '' } },
+  myRideDraft: { am: { pickup: '', drop: '', bus: 1 }, pm: { pickup: '', drop: '', bus: 1 } },
   myRideManageSlot: 'am',
 };
 
@@ -101,6 +101,7 @@ function normalizeSavedRideEntry(ride, slot) {
     slot,
     pickup,
     drop,
+    bus: ride.bus === 2 ? 2 : 1,
     savedAt: ride.savedAt || new Date().toISOString(),
   };
 }
@@ -134,7 +135,8 @@ function buildRiderRecord(base = {}, overrides = {}) {
   const incoming = overrides.savedRides || merged.savedRides || {};
   savedRides.am = normalizeSavedRideEntry(incoming.am, 'am');
   savedRides.pm = normalizeSavedRideEntry(incoming.pm, 'pm');
-  if (!savedRides.am && (merged.boardingStop || merged.stop || merged.dropStop)) {
+  const hasExplicitSavedRides = Object.prototype.hasOwnProperty.call(overrides, 'savedRides') || Object.prototype.hasOwnProperty.call(base, 'savedRides');
+  if (!hasExplicitSavedRides && !savedRides.am && (merged.boardingStop || merged.stop || merged.dropStop)) {
     savedRides.am = normalizeSavedRideEntry({
       pickup: merged.boardingStop || merged.stop || '',
       drop: merged.dropStop || merged.boardingStop || merged.stop || '',
@@ -153,6 +155,7 @@ function syncRideDraftFromSavedRides(rider = S.user) {
     S.myRideDraft[slot] = {
       pickup: ride?.pickup || '',
       drop: ride?.drop || '',
+      bus: ride?.bus || 1,
     };
   });
 }
@@ -369,7 +372,15 @@ function renderStopMarkers() {
   Object.values(stopMarkers).forEach(marker => marker?.remove());
 
   const freshMarkers = {};
-  getStopsForSlot().forEach(stop => {
+  let stopsToRender = getStopsForSlot();
+  if (!S.user?.role?.startsWith('driver')) {
+    const ride = getRideForSlot(S.user, S.slot);
+    stopsToRender = [ride?.pickup, ride?.drop]
+      .map(value => findStopByValue(value, S.slot))
+      .filter(Boolean)
+      .filter((stop, index, arr) => arr.findIndex(candidate => candidate.id === stop.id) === index);
+  }
+  stopsToRender.forEach(stop => {
     freshMarkers[stop.id] = _makeStopMarker(stop, 0).addTo();
   });
   window._stopMarkers = freshMarkers;
@@ -586,9 +597,20 @@ function updateStopPopups(openAll) {
   if (!stopMarkers) return;
   const busN = S.user?.role?.startsWith('driver') ? parseInt(S.user.role.slice(-1)) : null;
 
-  getStopsForSlot().forEach(s => {
+  Object.values(stopMarkers).forEach(marker => marker?.remove());
+
+  let stopsToRender = getStopsForSlot();
+  if (!S.user?.role?.startsWith('driver')) {
+    const ride = getRideForSlot(S.user, S.slot);
+    stopsToRender = [ride?.pickup, ride?.drop]
+      .map(value => findStopByValue(value, S.slot))
+      .filter(Boolean)
+      .filter((stop, index, arr) => arr.findIndex(candidate => candidate.id === stop.id) === index);
+  }
+
+  const freshMarkers = {};
+  stopsToRender.forEach(s => {
     const old = stopMarkers[s.id];
-    if (!old) return;
 
     const count = Object.values(S.riders).filter(r =>
       r.checkedIn && stopMatchesValue(s, getRiderActiveStop(r)) &&
@@ -603,12 +625,12 @@ function updateStopPopups(openAll) {
       </div>`;
 
     // Swap marker icon to reflect count (remove old, add new)
-    const wasOpen = old.isPopupOpen();
-    old.remove();
+    const wasOpen = old?.isPopupOpen?.() || false;
     const fresh = _makeStopMarker(s, count).bindPopup(popupHtml).addTo();
-    stopMarkers[s.id] = fresh;
+    freshMarkers[s.id] = fresh;
     if ((openAll && count > 0) || wasOpen) fresh.openPopup();
   });
+  window._stopMarkers = freshMarkers;
 }
 
 let riderMarkers = {};
@@ -1186,7 +1208,7 @@ function populateMyRideSelectors() {
   const pickupSelect = $('myride-pickup');
   const dropSelect = $('myride-drop');
   if (!pickupSelect || !dropSelect) return;
-  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '' };
+  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '', bus: 1 };
   pickupSelect.innerHTML = `<option value="">Select pickup...</option>${getStopsForSlot().map(stop => `<option value="${stop.name}" ${draft.pickup === stop.name ? 'selected' : ''}>${stop.name}</option>`).join('')}`;
   const dropOptions = getDropOptionsForPickup(draft.pickup, S.slot);
   dropSelect.innerHTML = `<option value="">Select drop...</option>${dropOptions.map(stop => `<option value="${stop.name}" ${draft.drop === stop.name ? 'selected' : ''}>${stop.name}</option>`).join('')}`;
@@ -1197,7 +1219,7 @@ function renderMyRide() {
   if (!el || S.user?.role?.startsWith('driver')) return;
   const ride = getCurrentRide();
   const slotLabel = CONFIG.SLOTS[S.slot].label;
-  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '' };
+  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '', bus: 1 };
   el.innerHTML = `
     <div class="myride-shell">
       <div class="panel-titlerow">
@@ -1207,6 +1229,10 @@ function renderMyRide() {
       <div class="myride-slot-switch">
         <button type="button" class="myride-slot-btn${S.slot === 'am' ? ' active' : ''}" onclick="switchMyRideSlot('am')">AM Ride</button>
         <button type="button" class="myride-slot-btn${S.slot === 'pm' ? ' active' : ''}" onclick="switchMyRideSlot('pm')">PM Ride</button>
+      </div>
+      <div class="myride-bus-switch">
+        <button type="button" class="myride-bus-btn${draft.bus === 1 ? ' active' : ''}" onclick="selectMyRideBus(1)">Bus 1</button>
+        <button type="button" class="myride-bus-btn${draft.bus === 2 ? ' active' : ''}" onclick="selectMyRideBus(2)">Bus 2</button>
       </div>
       <div class="myride-card">
         <div class="myride-route">
@@ -1226,7 +1252,7 @@ function renderMyRide() {
             </div>
           </div>
         </div>
-        <button type="button" class="btn-primary full" id="btn-save-myride">${ride ? 'Save ride changes' : 'Save my ride'}</button>
+        <button type="button" class="btn-primary full" id="btn-save-myride">Book my ride</button>
       </div>
       ${ride ? `
         <div>
@@ -1235,17 +1261,14 @@ function renderMyRide() {
             <div class="myride-ride-main">
               <div class="myride-date">${getSlotRideDateLabel(S.slot)}</div>
               <div class="myride-ride-route">
-                <div class="myride-time-col">
+                <div class="myride-route-row">
                   <div class="myride-time pickup">${slotLabel}</div>
-                  <div class="myride-time drop">${formatRideTime(CONFIG.SLOTS[S.slot].time, S.slot)}</div>
-                </div>
-                <div class="myride-mini-dots">
                   <span class="myride-dot pickup"></span>
-                  <span class="myride-line"></span>
-                  <span class="myride-dot drop"></span>
-                </div>
-                <div>
                   <div class="myride-ride-stop">${ride.pickup}</div>
+                </div>
+                <div class="myride-route-row">
+                  <div class="myride-time drop">${formatRideTime(CONFIG.SLOTS[S.slot].time, S.slot)}</div>
+                  <span class="myride-dot drop"></span>
                   <div class="myride-ride-stop">${ride.drop}</div>
                 </div>
               </div>
@@ -1272,18 +1295,27 @@ function renderMyRide() {
 
 window.switchMyRideSlot = function(slot) {
   window.selectSlot(slot);
+  const ride = getRideForSlot(S.riders[S.user?.id], slot);
+  const draft = S.myRideDraft[slot] || { pickup: '', drop: '', bus: 1 };
+  window.selectBus(ride?.bus || draft.bus || 1);
   window.goTab('myride');
+};
+
+window.selectMyRideBus = function(bus) {
+  S.myRideDraft[S.slot].bus = bus;
+  window.selectBus(bus);
+  renderMyRide();
 };
 
 window.saveMyRide = function() {
   const rider = S.riders[S.user?.id] || {};
-  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '' };
+  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '', bus: 1 };
   if (!draft.pickup || !draft.drop) {
     toast('Select both pickup and drop');
     return;
   }
   const savedRides = normalizeSavedRides(rider);
-  savedRides[S.slot] = { slot: S.slot, pickup: draft.pickup, drop: draft.drop, savedAt: new Date().toISOString() };
+  savedRides[S.slot] = { slot: S.slot, pickup: draft.pickup, drop: draft.drop, bus: draft.bus === 2 ? 2 : 1, savedAt: new Date().toISOString() };
   const updated = buildRiderRecord(rider, { name: S.user.name, phone: S.user.phone, savedRides });
   S.riders[S.user.id] = updated;
   S.user = buildRiderRecord(S.user, { savedRides });
@@ -1304,7 +1336,17 @@ window.openManageRide = function(slot) {
 };
 
 window.manageRideEdit = function() {
+  const ride = getRideForSlot(S.riders[S.user?.id], S.myRideManageSlot);
+  if (ride) {
+    S.myRideDraft[S.myRideManageSlot] = {
+      pickup: ride.pickup,
+      drop: ride.drop,
+      bus: ride.bus || 1,
+    };
+    window.selectBus(ride.bus || 1);
+  }
   window.closeModal();
+  window.selectSlot(S.myRideManageSlot);
   window.goTab('myride');
 };
 
@@ -1312,6 +1354,7 @@ window.manageRideCancel = function() {
   const rider = S.riders[S.user?.id] || {};
   const savedRides = normalizeSavedRides(rider);
   savedRides[S.myRideManageSlot] = null;
+  S.myRideDraft[S.myRideManageSlot] = { pickup: '', drop: '', bus: S.bus };
   const updated = buildRiderRecord(rider, { savedRides });
   S.riders[S.user.id] = updated;
   S.user = buildRiderRecord(S.user, { savedRides });
@@ -1322,42 +1365,12 @@ window.manageRideCancel = function() {
   toast('Ride cancelled');
 };
 
-window.manageRideReschedule = function() {
-  const from = S.myRideManageSlot;
-  const to = from === 'am' ? 'pm' : 'am';
-  const rider = S.riders[S.user?.id] || {};
-  const savedRides = normalizeSavedRides(rider);
-  if (savedRides[to]) {
-    toast(`A ${to.toUpperCase()} ride is already saved`);
-    return;
-  }
-  savedRides[to] = savedRides[from] ? { ...savedRides[from], slot: to, savedAt: new Date().toISOString() } : null;
-  savedRides[from] = null;
-  const carried = { ...(S.myRideDraft[from] || { pickup: '', drop: '' }) };
-  const targetStops = getStopsForSlot(to);
-  const pickupValid = targetStops.some(stop => stopMatchesValue(stop, carried.pickup));
-  const dropValid = targetStops.some(stop => stopMatchesValue(stop, carried.drop));
-  S.myRideDraft[to] = {
-    pickup: pickupValid ? carried.pickup : '',
-    drop: dropValid ? carried.drop : '',
-  };
-  S.myRideDraft[from] = { pickup: '', drop: '' };
-  const updated = buildRiderRecord(rider, { savedRides });
-  S.riders[S.user.id] = updated;
-  S.user = buildRiderRecord(S.user, { savedRides });
-  localStorage.setItem('nc_user', JSON.stringify(S.user));
-  if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
-  window.closeModal();
-  window.selectSlot(to);
-  window.goTab('myride');
-  renderMyRide();
-  toast(`Ride moved to ${to.toUpperCase()}`);
-};
-
 window.trackRide = function(slot) {
+  const ride = getRideForSlot(S.riders[S.user?.id], slot);
+  if (ride?.bus) window.selectBus(ride.bus);
   window.selectSlot(slot);
   window.goTab('map');
-  const pos = S.busPositions[S.bus];
+  const pos = S.busPositions[ride?.bus || S.bus];
   if (pos) updateETA(pos.lat, pos.lng);
 };
 
@@ -1707,7 +1720,6 @@ window.addEventListener('DOMContentLoaded', () => {
   bindClick('btn-confirm-end-trip', window.confirmEndTrip);
   bindClick('btn-cancel-end-trip', window.closeModal);
   bindClick('btn-manage-edit', window.manageRideEdit);
-  bindClick('btn-manage-reschedule', window.manageRideReschedule);
   bindClick('btn-manage-cancel', window.manageRideCancel);
   bindClick('backdrop', window.closeModal);
   bindAllClick('.modal-x', window.closeModal);
