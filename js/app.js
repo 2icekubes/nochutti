@@ -142,6 +142,13 @@ const today = () => {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0,10);
 };
+const dateKey = value => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+};
 const fmtDate = s => new Date(s).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
 const isValidSlot = slot => slot === 'am' || slot === 'pm';
 const isFreshPosition = pos => !!pos && Date.now() - pos.ts < 30 * 60 * 1000;
@@ -222,7 +229,15 @@ function getRideForSlot(rider = S.user, slot = S.slot) {
 }
 
 function getExplicitRideForSlot(rider, slot = S.slot) {
-  return normalizeSavedRideEntry(rider?.savedRides?.[slot], slot);
+  const ride = rider?.savedRides?.[slot];
+  if (!ride?.pickup || !ride?.drop || dateKey(ride.savedAt) !== today()) return null;
+  return {
+    slot,
+    pickup: ride.pickup,
+    drop: ride.drop,
+    bus: ride.bus === 2 ? 2 : 1,
+    savedAt: ride.savedAt,
+  };
 }
 
 function getCurrentRide(slot = S.slot, rider = S.user) {
