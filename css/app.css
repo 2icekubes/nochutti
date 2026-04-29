@@ -172,7 +172,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 .myride-slot-btn{flex:1;padding:10px 12px;border:none;border-radius:12px;background:transparent;color:var(--t2);font-family:var(--fh);font-size:13px;font-weight:700;cursor:pointer}
 .myride-slot-btn.active{background:var(--grn);color:#0d1f0f}
 .myride-bus-switch{display:flex;gap:8px}
-.myride-bus-btn{flex:1;padding:10px 12px;border:1px solid var(--bdr2);border-radius:14px;background:var(--bg1);color:var(--t1);font-family:var(--fh);font-size:13px;font-weight:700;cursor:pointer}
+.myride-bus-btn{flex:1;min-width:0;padding:10px 8px;border:1px solid var(--bdr2);border-radius:14px;background:var(--bg1);color:var(--t1);font-family:var(--fh);font-size:12px;font-weight:700;cursor:pointer;line-height:1.2}
 .myride-bus-btn.active{border-color:var(--grn);background:rgba(74,222,128,.14);color:var(--grn)}
 .myride-card{background:linear-gradient(180deg,#17311e 0%,#122217 100%);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:18px;box-shadow:0 12px 28px rgba(0,0,0,.28)}
 .myride-card-light{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;overflow:hidden}

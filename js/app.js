@@ -1429,6 +1429,41 @@ function getSlotBusLabel(slot = S.slot, bus = S.bus) {
   return formatRideTime(getSlotBusTime(slot, bus));
 }
 
+function addMinutesToTime(timeValue, minutesToAdd = 0) {
+  if (!timeValue) return '';
+  const [hours, minutes] = timeValue.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours, minutes + Math.round(minutesToAdd), 0, 0);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function distanceKm(a, b) {
+  if (!a || !b) return 0;
+  return Math.sqrt(Math.pow((a.lat - b.lat) * 111, 2) + Math.pow((a.lng - b.lng) * 111, 2));
+}
+
+function getScheduledStopOffsetMinutes(stopValue, slot = S.slot) {
+  const stops = getStopsForSlot(slot);
+  const stopIndex = stops.findIndex(stop => stopMatchesValue(stop, stopValue));
+  if (stopIndex <= 0) return 0;
+
+  const speed = slot === 'am' ? 18 : 22;
+  let total = 0;
+  for (let i = 1; i <= stopIndex; i++) {
+    total += (distanceKm(stops[i - 1], stops[i]) / speed) * 60;
+  }
+  return Math.round(total);
+}
+
+function getScheduledStopTime(stopValue, slot = S.slot, bus = S.bus) {
+  const baseTime = getSlotBusTime(slot, bus);
+  return formatRideTime(addMinutesToTime(baseTime, getScheduledStopOffsetMinutes(stopValue, slot)));
+}
+
+function getMyRideBusButtonLabel(slot, bus) {
+  return `Bus ${bus} ${getSlotBusLabel(slot, bus).toUpperCase()}`;
+}
+
 function populateMyRideSelectors() {
   const pickupSelect = $('myride-pickup');
   const dropSelect = $('myride-drop');
@@ -1445,7 +1480,8 @@ function renderMyRide() {
   const ride = getCurrentRide();
   const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '', bus: 1 };
   const rideBus = ride?.bus || draft.bus || 1;
-  const slotLabel = getSlotBusLabel(S.slot, rideBus);
+  const pickupTime = ride ? getScheduledStopTime(ride.pickup, S.slot, rideBus) : getSlotBusLabel(S.slot, rideBus);
+  const dropTime = ride ? getScheduledStopTime(ride.drop, S.slot, rideBus) : '';
   el.innerHTML = `
     <div class="myride-shell">
       <div class="panel-titlerow">
@@ -1457,8 +1493,8 @@ function renderMyRide() {
         <button type="button" class="myride-slot-btn${S.slot === 'pm' ? ' active' : ''}" onclick="switchMyRideSlot('pm')">PM Ride</button>
       </div>
       <div class="myride-bus-switch">
-        <button type="button" class="myride-bus-btn${draft.bus === 1 ? ' active' : ''}" onclick="selectMyRideBus(1)">Bus 1</button>
-        <button type="button" class="myride-bus-btn${draft.bus === 2 ? ' active' : ''}" onclick="selectMyRideBus(2)">Bus 2</button>
+        <button type="button" class="myride-bus-btn${draft.bus === 1 ? ' active' : ''}" onclick="selectMyRideBus(1)">${getMyRideBusButtonLabel(S.slot, 1)}</button>
+        <button type="button" class="myride-bus-btn${draft.bus === 2 ? ' active' : ''}" onclick="selectMyRideBus(2)">${getMyRideBusButtonLabel(S.slot, 2)}</button>
       </div>
       <div class="myride-card">
         <div class="myride-route">
@@ -1485,15 +1521,15 @@ function renderMyRide() {
           <div class="myride-upcoming-head">Upcoming Rides</div>
           <div class="myride-ride-card">
             <div class="myride-ride-main">
-              <div class="myride-date">${getSlotRideDateLabel(S.slot)}</div>
+              <div class="myride-date">${getSlotRideDateLabel(S.slot)} Â· Bus ${rideBus}</div>
               <div class="myride-ride-route">
                 <div class="myride-route-row">
-                  <div class="myride-time pickup">${slotLabel}</div>
+                  <div class="myride-time pickup">${pickupTime}</div>
                   <span class="myride-dot pickup"></span>
                   <div class="myride-ride-stop">${ride.pickup}</div>
                 </div>
                 <div class="myride-route-row">
-                  <div class="myride-time drop">Bus ${rideBus}</div>
+                  <div class="myride-time drop">${dropTime}</div>
                   <span class="myride-dot drop"></span>
                   <div class="myride-ride-stop">${ride.drop}</div>
                 </div>
