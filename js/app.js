@@ -20,7 +20,7 @@ const S = {
   riderWatchId: null,
   riders: {},          // id → rider
   checkins: {},        // "YYYY-MM-DD" → { bus1: Set<id>, bus2: Set<id> }
-  busPositions: {},    // busN → { lat, lng, ts }
+  busPositions: { am: {}, pm: {} },    // slot → busN → { lat, lng, ts }
   selectedRider: null,
   selectedPack: null,
   demoStep: { 1: 0, 2: 5 },
@@ -122,6 +122,22 @@ const today = () => {
   return d.toISOString().slice(0,10);
 };
 const fmtDate = s => new Date(s).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+const isValidSlot = slot => slot === 'am' || slot === 'pm';
+const isFreshPosition = pos => !!pos && Date.now() - pos.ts < 30 * 60 * 1000;
+
+function getBusPosition(busN, slot = S.slot) {
+  return isValidSlot(slot) ? S.busPositions[slot]?.[busN] || null : null;
+}
+
+function setBusPosition(busN, position, slot = S.slot) {
+  if (!isValidSlot(slot)) return;
+  S.busPositions[slot] = S.busPositions[slot] || {};
+  S.busPositions[slot][busN] = { ...position, slot };
+}
+
+function clearBusPosition(busN, slot = S.slot) {
+  if (isValidSlot(slot) && S.busPositions[slot]) delete S.busPositions[slot][busN];
+}
 
 const AV_COLORS = [
   ['rgba(74,222,128,.18)','#4ade80'],
@@ -478,10 +494,16 @@ function updateBusPopup(busN) {
   busMarkers[busN].bindPopup(popupContent(driverName));
 }
 
-function moveBus(busN, lat, lng) {
+function moveBus(busN, lat, lng, slot = S.slot, ts = Date.now()) {
+  if (!isValidSlot(slot)) return;
+  setBusPosition(busN, { lat, lng, ts }, slot);
+  if (slot !== S.slot) {
+    updateStatusBadges();
+    return;
+  }
+
   if (!busMarkers[busN]) createBusMarker(busN);
   busMarkers[busN].setLatLng([lat, lng]);
-  S.busPositions[busN] = { lat, lng, ts: Date.now() };
   updateStatusBadges();
   if (busN === S.bus) updateETA(lat, lng);
   checkProximity(busN, lat, lng);
@@ -494,17 +516,35 @@ function moveBus(busN, lat, lng) {
   if (el) el.classList.toggle('bus-live-pulse', isMyBus);
 }
 
-function hideBus(busN) {
-  if (busMarkers[busN]) {
+function hideBus(busN, slot = S.slot) {
+  clearBusPosition(busN, slot);
+  if (slot === S.slot && busMarkers[busN]) {
     busMarkers[busN].remove();
     busMarkers[busN] = null;
   }
-  delete S.busPositions[busN];
   updateStatusBadges();
-  if (S.bus === busN) {
+  if (slot === S.slot && S.bus === busN) {
     const el = $('eta-text');
     if (el) el.textContent = 'Trip yet to start';
   }
+}
+
+function refreshBusMarkerForSlot(busN) {
+  const pos = getBusPosition(busN);
+  if (isFreshPosition(pos)) {
+    if (!busMarkers[busN]) createBusMarker(busN);
+    busMarkers[busN].setLatLng([pos.lat, pos.lng]);
+    if (busN === S.bus) updateETA(pos.lat, pos.lng);
+  } else if (busMarkers[busN]) {
+    busMarkers[busN].remove();
+    busMarkers[busN] = null;
+    if (busN === S.bus) $('eta-text').textContent = 'Trip yet to start';
+  }
+}
+
+function refreshBusMarkersForSlot() {
+  [1, 2].forEach(refreshBusMarkerForSlot);
+  updateStatusBadges();
 }
 
 function checkProximity(busN, lat, lng) {
@@ -568,11 +608,13 @@ function updateETA(lat, lng) {
     return;
   }
 
-  const pos = S.busPositions[S.bus];
-  if (!pos || Date.now() - pos.ts > 30 * 60 * 1000) {
+  const pos = getBusPosition(S.bus);
+  if (!isFreshPosition(pos)) {
     el.textContent = 'Trip yet to start';
     return;
   }
+  lat = lat ?? pos.lat;
+  lng = lng ?? pos.lng;
 
   const targetStopValue = getRiderActiveStop(S.user);
   if (!targetStopValue) {
@@ -593,7 +635,7 @@ function updateStatusBadges() {
   [1,2].forEach(n => {
     const el = $(`b${n}-status`);
     if (!el) return;
-    const pos = S.busPositions[n];
+    const pos = getBusPosition(n);
     if (pos) {
       const age = (Date.now() - pos.ts) / 1000;
       el.textContent = age < 30 ? 'Live' : `${Math.round(age/60)}m ago`;
@@ -626,10 +668,12 @@ function listenBusPositions() {
   [1,2].forEach(n => {
     dbOnValue(`bus${n}/position`, snap => {
       const d = snap.val();
-      if (d?.lat && d?.ts && Date.now() - d.ts < 30 * 60 * 1000) {
-        moveBus(n, d.lat, d.lng);
+      const slot = d?.slot;
+      const isCurrentTrip = isValidSlot(slot) && d.date === today();
+      if (d?.lat && d?.lng && d?.ts && isCurrentTrip && Date.now() - d.ts < 30 * 60 * 1000) {
+        moveBus(n, d.lat, d.lng, slot, d.ts);
       } else {
-        hideBus(n);
+        hideBus(n, isValidSlot(slot) ? slot : S.slot);
       }
     });
   });
@@ -766,8 +810,8 @@ window.selectBus = function(n) {
   });
   updateTopbarCtx();
   updateCheckinBtn();
-  const pos = S.busPositions[n];
-  if (pos && Date.now() - pos.ts < 30 * 60 * 1000) { 
+  const pos = getBusPosition(n);
+  if (isFreshPosition(pos)) { 
     setMapView(pos.lat, pos.lng, 15); 
     updateETA(pos.lat, pos.lng); 
   }
@@ -783,6 +827,7 @@ window.selectSlot = function(slot) {
   $('bustab-1-sub').textContent = getSlotBusLabel(slot, 1);
   $('bustab-2-sub').textContent = getSlotBusLabel(slot, 2);
   renderStopMarkers();
+  refreshBusMarkersForSlot();
   updateTopbarCtx();
   updateCheckinBtn();
   renderMyRide();
@@ -816,11 +861,13 @@ function startBroadcast() {
   if (!navigator.geolocation) { toast('Geolocation not available'); return; }
   requestWakeLock();
   const busN = parseInt(S.user.role.slice(-1));
+  const broadcastSlot = S.slot;
   S.watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
-    moveBus(busN, lat, lng);
+    const ts = Date.now();
+    moveBus(busN, lat, lng, broadcastSlot, ts);
     setMapView(lat, lng, 15);
-    dbSet(`bus${busN}/position`, { lat, lng, ts: Date.now() });
+    dbSet(`bus${busN}/position`, { lat, lng, slot: broadcastSlot, date: today(), ts });
   }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
   S.broadcasting = true;
   updateBroadcastBtn();
@@ -970,8 +1017,9 @@ window.toggleCheckin = function() {
   const newStatus = !alreadyIn;
   const busAssigned = newStatus ? S.bus : null;
 
-  if (!newStatus && S.busPositions[S.bus]) {
-    const pos = S.busPositions[S.bus];
+  const activeBusPosition = getBusPosition(S.bus);
+  if (!newStatus && activeBusPosition) {
+    const pos = activeBusPosition;
     const stop = findStopByValue(getRiderActiveStop(S.user));
     if (stop) {
       const d = Math.sqrt(Math.pow((pos.lat-stop.lat)*111,2)+Math.pow((pos.lng-stop.lng)*111,2));
@@ -1116,7 +1164,7 @@ window.toggleOnboard = function() {
   } else {
     // Prevent riders from deboarding manually unless bus is at their drop stop
     if (S.user?.role && !S.user.role.startsWith('driver')) {
-      const pos = S.busPositions[busAssigned];
+      const pos = getBusPosition(busAssigned);
       const drop = ride.drop || getRiderDropStop(rider);
       const stop = findStopByValue(drop, S.slot);
       if (stop && pos) {
@@ -1499,7 +1547,7 @@ window.saveMyRide = function() {
   window.selectBus(selectedBus);
   renderMyRide();
   renderRiders();
-  updateETA(S.busPositions[S.bus]?.lat || CONFIG.MAP_CENTER[0], S.busPositions[S.bus]?.lng || CONFIG.MAP_CENTER[1]);
+  updateETA();
   updateCheckinBtn();
   updateOccupancy();
   toast('Ride booked');
@@ -1555,7 +1603,7 @@ window.trackRide = function(slot) {
   if (ride?.bus) window.selectBus(ride.bus);
   window.selectSlot(slot);
   window.goTab('map');
-  const pos = S.busPositions[ride?.bus || S.bus];
+  const pos = getBusPosition(ride?.bus || S.bus);
   if (pos) updateETA(pos.lat, pos.lng);
 };
 
