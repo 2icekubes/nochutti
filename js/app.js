@@ -177,11 +177,6 @@ function getRiderActiveStop(rider = S.user, slot = S.slot) {
   return rider?.onboarded ? ride.drop : ride.pickup;
 }
 
-function getRiderRouteLabel(rider = S.user) {
-  const boarding = getRiderBoardingStop(rider);
-  const drop = getRiderDropStop(rider);
-  return drop && drop !== boarding ? `${boarding} → ${drop}` : boarding;
-}
 
 function getStopOrderMap(slot = S.slot) {
   const order = {};
