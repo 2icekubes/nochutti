@@ -185,22 +185,22 @@ function createBusMarker(busN) {
 }
 
 function addRouteLine() {
-  if (!map || map.getSource('demo-route')) return;
-  map.addSource('demo-route', {
+  if (!map || map.getSource('route-path')) return;
+  map.addSource('route-path', {
     type: 'geojson',
     data: {
       type: 'Feature',
       geometry: {
         type: 'LineString',
-        coordinates: CONFIG.DEMO_ROUTE.map(([lat, lng]) => toLngLat(lat, lng)),
+        coordinates: CONFIG.ROUTE_PATH.map(([lat, lng]) => toLngLat(lat, lng)),
       },
       properties: {},
     },
   });
   map.addLayer({
-    id: 'demo-route',
+    id: 'route-path',
     type: 'line',
-    source: 'demo-route',
+    source: 'route-path',
     paint: {
       'line-color': '#4ade80',
       'line-width': 4,
@@ -368,7 +368,7 @@ function updateStatusBadges() {
 // ── Demo simulation ───────────────────────────
 function startDemo() {
   clearInterval(S.demoInterval);
-  const route = CONFIG.DEMO_ROUTE;
+  const route = CONFIG.ROUTE_PATH;
   // Bus 1 and bus 2 at different positions
   moveBus(1, ...route[S.demoStep[1]]);
   moveBus(2, ...route[S.demoStep[2]]);
