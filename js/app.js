@@ -1868,6 +1868,9 @@ window.goTab = function(tab) {
   $('panel-wallet').classList.toggle('hidden', tab!=='wallet');
   $('panel-myride')?.classList.toggle('hidden', tab!=='myride');
   if (tab==='map') setTimeout(()=>map?.resize(), 100);
+  if (tab==='map' && S.riderLocation && !S.user?.role?.startsWith('driver')) {
+    setTimeout(() => setMapView(S.riderLocation.lat, S.riderLocation.lng, 16), 150);
+  }
   if (tab==='riders') renderRiders();
   if (tab==='wallet') renderWallet();
   if (tab==='myride') renderMyRide();
