@@ -72,6 +72,54 @@ const AV_COLORS = [
 ];
 const avColor = id => AV_COLORS[[...id].reduce((s,c)=>s+c.charCodeAt(0),0) % AV_COLORS.length];
 
+function getStopsForSlot(slot = S.slot) {
+  return slot === 'pm' ? CONFIG.PM_STOPS : CONFIG.AM_STOPS;
+}
+
+function findStopByValue(value, slot = S.slot) {
+  if (!value) return null;
+  return getStopsForSlot(slot).find(s => s.id === value || s.name === value || s.aliases?.includes(value)) || null;
+}
+
+function getStopValueAtIndex(index, slot = S.slot) {
+  const stop = getStopsForSlot(slot)[index];
+  return stop ? stop.name : '';
+}
+
+function getRiderBoardingStop(rider = S.user) {
+  return rider?.boardingStop || rider?.stop || '';
+}
+
+function getRiderDropStop(rider = S.user) {
+  return rider?.dropStop || '';
+}
+
+function getRiderActiveStop(rider = S.user, slot = S.slot) {
+  return getRiderBoardingStop(rider);
+}
+
+function getRiderRouteLabel(rider = S.user) {
+  const boarding = getRiderBoardingStop(rider);
+  const drop = getRiderDropStop(rider);
+  return drop && drop !== boarding ? `${boarding} → ${drop}` : boarding;
+}
+
+function getStopOrderMap(slot = S.slot) {
+  const order = {};
+  getStopsForSlot(slot).forEach((stop, index) => {
+    order[stop.name] = index;
+    order[stop.id] = index;
+    stop.aliases?.forEach(alias => {
+      order[alias] = index;
+    });
+  });
+  return order;
+}
+
+function stopMatchesValue(stop, value) {
+  return !!value && (stop.name === value || stop.id === value || stop.aliases?.includes(value));
+}
+
 function rideColor(rides) {
   if (rides === 0) return ['c-r','f-r'];
   if (rides <= 2) return ['c-a','f-a'];
@@ -227,15 +275,24 @@ async function initMap() {
   if (map.loaded()) addRouteLine();
   else map.once('load', addRouteLine);
 
-  const stopMarkers = {};
-  CONFIG.STOPS.forEach(s => {
-    stopMarkers[s.id] = _makeStopMarker(s, 0).addTo();
-  });
-  window._stopMarkers = stopMarkers;
+  window._stopMarkers = {};
+  renderStopMarkers();
 
   [1, 2].forEach(n => {
     busMarkers[n] = null;
   });
+}
+
+function renderStopMarkers() {
+  const stopMarkers = window._stopMarkers || {};
+  Object.values(stopMarkers).forEach(marker => marker?.remove());
+
+  const freshMarkers = {};
+  getStopsForSlot().forEach(stop => {
+    freshMarkers[stop.id] = _makeStopMarker(stop, 0).addTo();
+  });
+  window._stopMarkers = freshMarkers;
+  updateStopPopups();
 }
 
 // Creates a stop marker icon sized/coloured by rider count
@@ -301,13 +358,13 @@ function checkProximity(busN, lat, lng) {
   if (S.user?.role?.startsWith('driver')) return;
   if (busN !== S.bus) return;
 
-  const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) || CONFIG.STOPS.find(s => s.name === S.user?.stop);
+  const stop = findStopByValue(getRiderActiveStop(S.user));
   if (!stop) return;
 
   const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
 
   // "Bus started" only fires if bus is near the first route stop
-  const firstStop = CONFIG.STOPS[0];
+  const firstStop = getStopsForSlot()[0];
   const distFromFirst = Math.sqrt(Math.pow((lat - firstStop.lat) * 111, 2) + Math.pow((lng - firstStop.lng) * 111, 2));
   const startKey = `bus${busN}_started_${today()}`;
   if (distFromFirst < (CONFIG.ROUTE_START_RADIUS_KM || 2.0) && !S.notifiedEvents.includes(startKey)) {
@@ -339,8 +396,7 @@ function updateETA(lat, lng) {
     return;
   }
 
-  const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) ||
-               CONFIG.STOPS.find(s => s.name === S.user?.stop);
+  const stop = findStopByValue(getRiderActiveStop(S.user));
   if (!stop) return;
   const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
   if (d < 0.05) { el.textContent = `Bus ${S.bus} is at your stop! 🎉`; return; }
@@ -436,12 +492,12 @@ function updateStopPopups(openAll) {
   if (!stopMarkers) return;
   const busN = S.user?.role?.startsWith('driver') ? parseInt(S.user.role.slice(-1)) : null;
 
-  CONFIG.STOPS.forEach(s => {
+  getStopsForSlot().forEach(s => {
     const old = stopMarkers[s.id];
     if (!old) return;
 
     const count = Object.values(S.riders).filter(r =>
-      r.checkedIn && (r.stop === s.name || r.stop === s.id) &&
+      r.checkedIn && stopMatchesValue(s, getRiderActiveStop(r)) &&
       (busN === null || r.busToday === busN)
     ).length;
 
@@ -527,7 +583,9 @@ window.selectSlot = function(slot) {
   $('sp-pm').classList.toggle('active', slot==='pm');
   $('bustab-1-sub').textContent = CONFIG.SLOTS[slot].label;
   $('bustab-2-sub').textContent = CONFIG.SLOTS[slot].label;
+  renderStopMarkers();
   updateTopbarCtx();
+  updateCheckinBtn();
 };
 
 function updateTopbarCtx() {
@@ -714,7 +772,7 @@ window.toggleCheckin = function() {
 
   if (!newStatus && S.busPositions[S.bus]) {
     const pos = S.busPositions[S.bus];
-    const stop = CONFIG.STOPS.find(s => s.id === S.user?.stop) || CONFIG.STOPS.find(s => s.name === S.user?.stop);
+    const stop = findStopByValue(getRiderActiveStop(S.user));
     if (stop) {
       const d = Math.sqrt(Math.pow((pos.lat-stop.lat)*111,2)+Math.pow((pos.lng-stop.lng)*111,2));
       const approachKey = `bus${S.bus}_approach_${today()}`;
@@ -751,7 +809,7 @@ window.toggleCheckin = function() {
     }
   }
 
-  const updated = { ...(S.riders[id] || { name: S.user.name, stop: S.user.stop, rides:0, maxRides:5, payments:[] }),
+  const updated = { ...(S.riders[id] || { name: S.user.name, stop: getRiderBoardingStop(S.user), boardingStop: getRiderBoardingStop(S.user), dropStop: getRiderDropStop(S.user), rides:0, maxRides:5, payments:[] }),
     checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() };
 
   if (DB_READY()) {
@@ -855,9 +913,8 @@ function renderRiders() {
   // Sorting
   if (_riderSort === 'stop') {
     // Sort by stop position in STOPS array
-    const stopOrder = {};
-    CONFIG.STOPS.forEach((s, i) => { stopOrder[s.name] = i; stopOrder[s.id] = i; });
-    entries.sort((a, b) => (stopOrder[a[1].stop] ?? 999) - (stopOrder[b[1].stop] ?? 999));
+    const stopOrder = getStopOrderMap();
+    entries.sort((a, b) => (stopOrder[getRiderActiveStop(a[1])] ?? 999) - (stopOrder[getRiderActiveStop(b[1])] ?? 999));
   } else {
     entries.sort((a, b) => (a[1].rides||0) - (b[1].rides||0));
   }
@@ -894,7 +951,7 @@ function renderRiders() {
       <div class="r-av" style="background:${bg};color:${fg}">${initials(r.name)}</div>
       <div class="r-info">
         <div class="r-name">${r.name}</div>
-        <div class="r-stop">📍 ${r.stop}</div>
+        <div class="r-stop">📍 ${getRiderRouteLabel(r)}</div>
         <div class="r-bus-today">${busTag}</div>
       </div>
       <div class="r-rides">
@@ -1003,7 +1060,7 @@ function renderDriverWallet(el) {
           <div class="r-av" style="background:${bg};color:${fg}">${initials(r.name)}</div>
           <div class="r-info">
             <div class="r-name">${r.name}</div>
-            <div class="r-stop">${r.stop}</div>
+            <div class="r-stop">${getRiderRouteLabel(r)}</div>
           </div>
           <div class="r-rides">
             <div class="r-rcount ${cc}">${r.rides||0}</div>
@@ -1027,7 +1084,7 @@ window.openPay = function(id) {
     <div class="pay-av" style="background:${bg};color:${fg}">${initials(r.name)}</div>
     <div>
       <div class="pay-name">${r.name}</div>
-      <div class="pay-sub">${r.rides||0} rides left · ${r.stop}</div>
+      <div class="pay-sub">${r.rides||0} rides left · ${getRiderRouteLabel(r)}</div>
     </div>`;
   document.querySelectorAll('.pack').forEach(p=>p.classList.remove('on'));
   $('custom-wrap').classList.add('hidden');
@@ -1117,24 +1174,28 @@ window.openSettings = function() {
   $('s-name').value = S.user?.name||'';
   const isDriver = S.user?.role?.startsWith('driver');
   const stopRow = $('s-stop-row');
+  const dropRow = $('s-drop-row');
   const busRow = $('s-bus-row');
   if (isDriver) {
     if (stopRow) stopRow.style.display = 'none';
+    if (dropRow) dropRow.style.display = 'none';
     if (busRow) { busRow.style.display = 'block'; $('s-bus-display').textContent = `Bus ${S.user.role.slice(-1)} (${S.user.name})`; }
   } else {
     if (stopRow) stopRow.style.display = 'block';
+    if (dropRow) dropRow.style.display = 'block';
     if (busRow) busRow.style.display = 'none';
-    const sel = $('s-stop');
-    sel.innerHTML = CONFIG.STOPS.map(s=>`<option value="${s.name}" ${S.user?.stop===s.name?'selected':''}>${s.name}</option>`).join('');
+    populateBoardingSelect($('s-stop'), getRiderBoardingStop(S.user));
+    populateDropSelect($('s-stop').value, $('s-drop'), getRiderDropStop(S.user));
   }
   openModal('modal-settings');
 };
 window.saveSettings = function() {
   const name = $('s-name').value.trim();
   const isDriver = S.user?.role?.startsWith('driver');
-  const stop = isDriver ? S.user.stop : $('s-stop').value;
-  if (!name || (!isDriver && !stop)) { toast('Fill all fields'); return; }
-  S.user = {...S.user, name, stop};
+  const boardingStop = isDriver ? getRiderBoardingStop(S.user) : $('s-stop').value;
+  const dropStop = isDriver ? getRiderDropStop(S.user) : $('s-drop').value;
+  if (!name || (!isDriver && (!boardingStop || !dropStop))) { toast('Fill all fields'); return; }
+  S.user = {...S.user, name, stop: boardingStop, boardingStop, dropStop};
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   $('avatar-btn').textContent = initials(name);
 
@@ -1143,6 +1204,18 @@ window.saveSettings = function() {
     const busNum = S.user.role.slice(-1);
     dbUpdateValues({ [`driverInfo/driver${busNum}/name`]: name });
     updateBusPopup(parseInt(busNum));
+  } else if (!isDriver) {
+    const nextRider = {
+      ...(S.riders[S.user.id] || {}),
+      name,
+      stop: boardingStop,
+      boardingStop,
+      dropStop,
+    };
+    S.riders[S.user.id] = nextRider;
+    if (DB_READY()) dbSet(`riders/${S.user.id}`, nextRider);
+    renderRiders();
+    renderWallet();
   }
 
   closeModal(); toast('Saved ✓');
@@ -1178,17 +1251,43 @@ window.pickRole = function(r) {
   } else {
     $('rider-fields').classList.remove('hidden');
     $('driver-pin-row').classList.add('hidden');
+    populateSetupStops();
   }
 };
 
 // Populate stop dropdown in setup
-function populateSetupStops() {
-  const sel = $('setup-stop');
-  CONFIG.STOPS.forEach(s=>{
-    const o = document.createElement('option');
-    o.value = s.name; o.textContent = s.name;
-    sel.appendChild(o);
+function populateBoardingSelect(selectEl, selectedValue = '') {
+  if (!selectEl) return;
+  selectEl.innerHTML = '<option value="">Select stop...</option>';
+  CONFIG.AM_STOPS.forEach(stop => {
+    const option = document.createElement('option');
+    option.value = stop.name;
+    option.textContent = stop.name;
+    option.selected = selectedValue === stop.name;
+    selectEl.appendChild(option);
   });
+}
+
+function populateDropSelect(boardingStop, selectEl, selectedValue = '') {
+  if (!selectEl) return;
+  const startIndex = CONFIG.AM_STOPS.findIndex(stop => stop.name === boardingStop || stop.id === boardingStop);
+  const dropOptions = startIndex >= 0 ? CONFIG.AM_STOPS.slice(startIndex + 1) : [];
+  selectEl.innerHTML = '<option value="">Select drop location...</option>';
+  dropOptions.forEach(stop => {
+    const option = document.createElement('option');
+    option.value = stop.name;
+    option.textContent = stop.name;
+    option.selected = selectedValue === stop.name;
+    selectEl.appendChild(option);
+  });
+  if (selectedValue && !dropOptions.some(stop => stop.name === selectedValue)) {
+    selectEl.value = '';
+  }
+}
+
+function populateSetupStops() {
+  populateBoardingSelect($('setup-stop'));
+  populateDropSelect($('setup-stop').value, $('setup-drop'));
 }
 
 window.doSetup = function() {
@@ -1200,8 +1299,9 @@ window.doSetup = function() {
 
   if (_role === 'rider') {
     const stop = $('setup-stop').value;
+    const dropStop = $('setup-drop').value;
     const code = $('setup-code').value.trim().toLowerCase();
-    if (!stop) { toast('Select your stop'); return; }
+    if (!stop || !dropStop) { toast('Select both boarding and drop locations'); return; }
     if (code !== CONFIG.JOIN_CODE) { toast('Wrong join code — ask your driver'); return; }
   } else {
     const pin = $('driver-pin').value;
@@ -1216,15 +1316,26 @@ window.doSetup = function() {
     : `${_role}_main`;
 
   const stopVal = _role === 'rider' ? $('setup-stop').value : '';
-  const user = { name, phone, stop: stopVal, role: _role, id };
+  const dropStopVal = _role === 'rider' ? $('setup-drop').value : '';
+  const user = { name, phone, stop: stopVal, boardingStop: stopVal, dropStop: dropStopVal, role: _role, id };
   localStorage.setItem('nc_user', JSON.stringify(user));
 
   // Register rider in Firebase
   if (_role === 'rider' && DB_READY()) {
-    const existing = S.riders[id];
-    if (!existing) {
-      dbSet(`riders/${id}`, { name, phone, stop: stopVal, rides:0, maxRides:5, payments:[], checkedIn:false, busToday:null });
-    }
+    const existing = S.riders[id] || {};
+    dbSet(`riders/${id}`, {
+      rides: 0,
+      maxRides: 5,
+      payments: [],
+      checkedIn: false,
+      busToday: null,
+      ...existing,
+      name,
+      phone,
+      stop: stopVal,
+      boardingStop: stopVal,
+      dropStop: dropStopVal,
+    });
   }
 
   // Register driver name in Firebase so bus popup can show it
@@ -1323,6 +1434,13 @@ window.addEventListener('DOMContentLoaded', () => {
   bindClick('backdrop', closeModal);
   bindAllClick('.modal-x', closeModal);
 
+  $('setup-stop')?.addEventListener('change', event => {
+    populateDropSelect(event.target.value, $('setup-drop'));
+  });
+  $('s-stop')?.addEventListener('change', event => {
+    populateDropSelect(event.target.value, $('s-drop'));
+  });
+
   const lName = localStorage.getItem('nc_last_name');
   const lPhone = localStorage.getItem('nc_last_phone');
   if (lName) $('setup-name').value = lName;
@@ -1334,7 +1452,16 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const saved = localStorage.getItem('nc_user');
     if (saved) {
-      try { S.user = JSON.parse(saved); launch().catch(handleLaunchError); }
+      try {
+        S.user = JSON.parse(saved);
+        if (S.user?.role === 'rider') {
+          S.user.boardingStop = getRiderBoardingStop(S.user);
+          S.user.stop = S.user.boardingStop;
+          S.user.dropStop = getRiderDropStop(S.user);
+          localStorage.setItem('nc_user', JSON.stringify(S.user));
+        }
+        launch().catch(handleLaunchError);
+      }
       catch { $('screen-setup').classList.remove('hidden'); }
     } else {
       $('screen-setup').classList.remove('hidden');

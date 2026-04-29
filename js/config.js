@@ -40,7 +40,7 @@ export const CONFIG = {
 
   // ── Boarding stops ───────────────────────
   // Add or remove stops for your route
-  STOPS: [
+  AM_STOPS: [
     { id: "esi_hospital", name: "ESI Hospital", lat: 22.4941, lng: 88.2192 },
     { id: "bata_more", name: "Bata More", lat: 22.4991, lng: 88.2312 },
     { id: "usha_factory", name: "Usha Factory", lat: 22.5037, lng: 88.2425 },
@@ -132,7 +132,43 @@ export const CONFIG = {
     [22.57038545985, 88.43582214239744]
   ],
 
+  PM_STOPS: [
+    { id: "ecospace_entry_gate", name: "Ecospace Entry Gate", aliases: ["Ecospace"], lat: 22.5858, lng: 88.4899 },
+    { id: "tcs_gp", name: "TCS GP", lat: 22.5816, lng: 88.4874 },
+    { id: "dlf_2", name: "DLF 2", lat: 22.5781, lng: 88.4867 },
+    { id: "unitech_gate_2", name: "Unitech Gate 2", lat: 22.5769, lng: 88.4830 },
+    { id: "tata_medical_opp", name: "Tata Medical Center (Opp)", aliases: ["Tata Medical Center"], lat: 22.5773, lng: 88.4800 },
+    { id: "narkel_bagan", name: "Narkel Bagan", lat: 22.5787, lng: 88.4729 },
+    { id: "axis_mall", name: "Axis Mall", lat: 22.5862, lng: 88.4694 },
+    { id: "dlf_1", name: "DLF 1", lat: 22.5844, lng: 88.4638 },
+    { id: "kia_showroom", name: "KIA Showroom", lat: 22.5823, lng: 88.4558 },
+    { id: "215_bus_terminus", name: "215 Bus Terminus", lat: 22.5820, lng: 88.4471 },
+    { id: "rs_more", name: "RS More", lat: 22.5806, lng: 88.4371 },
+    { id: "godrej_waterside", name: "Godrej Water Side", lat: 22.5782, lng: 88.4355 },
+    { id: "it_lagoon", name: "IT Lagoon", lat: 22.5747, lng: 88.4337 },
+    { id: "arch_waterfront", name: "Arch WaterFront", lat: 22.5729, lng: 88.4326 },
+    { id: "sdf_bus_stop", name: "SDF Bus Stop", aliases: ["SDF"], lat: 22.5686, lng: 88.4319 },
+    { id: "swasthya_bhawan_opp", name: "Swasthya Bhawan (Opp)", aliases: ["Swasthya Bhawan"], lat: 22.5714, lng: 88.4288 },
+    { id: "nicco_park", name: "Nicco Park", lat: 22.5710, lng: 88.4205 },
+    { id: "cesc_limited_taratala", name: "CESC Limited - Taratala", aliases: ["CESC Taratala"], lat: 22.5121, lng: 88.3215 },
+    { id: "iicp", name: "Indian Institute of Cerebral Palsy", lat: 22.5203, lng: 88.3263 },
+    { id: "jinjira_bazar", name: "Jinjira Bazar", lat: 22.5174, lng: 88.2979 },
+    { id: "sarkarpool", name: "Sarkarpool", lat: 22.5160, lng: 88.2889 },
+    { id: "gopalpur", name: "Gopalpur", lat: 22.5148, lng: 88.2861 },
+    { id: "rampur_bumper", name: "Rampur Bumper", lat: 22.5154, lng: 88.2789 },
+    { id: "benepukur", name: "Benepukur", lat: 22.5111, lng: 88.2803 },
+    { id: "jolkol", name: "Jolkol", lat: 22.5092, lng: 88.2624 },
+    { id: "jalkhura_bus_stop", name: "Jalkhura Bus Stop", aliases: ["Jalkhura"], lat: 22.5056, lng: 88.2483 },
+    { id: "usha_factory", name: "Usha Factory", lat: 22.5037, lng: 88.2425 },
+    { id: "bata_more", name: "Bata More", lat: 22.4991, lng: 88.2312 },
+    { id: "esi_hospital", name: "ESI Hospital", lat: 22.4941, lng: 88.2192 }
+  ],
+
+  STOPS: [],
+
   // ── Map defaults ─────────────────────────
   MAP_CENTER: [22.535108385642072, 88.32656492215528],
   MAP_ZOOM: 10.8,
 };
+
+CONFIG.STOPS = CONFIG.AM_STOPS;
