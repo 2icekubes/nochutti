@@ -63,10 +63,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 /* TOPBAR */
 .topbar{background:var(--bg1);border-bottom:1px solid var(--bdr);padding:9px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:20}
 .topbar-left{display:flex;align-items:center;gap:10px}
+.topbar-right{display:flex;align-items:center;gap:8px}
 .wordmark-sm{font-family:var(--fh);font-size:18px;font-weight:800;color:var(--t0);letter-spacing:-.5px}
 .wordmark-sm span{color:var(--grn)}
 .topbar-ctx{font-size:11px;color:var(--t2)}
 .avatar-btn{width:32px;height:32px;border-radius:50%;background:var(--grn3);border:1px solid var(--grn);color:var(--grn);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fh)}
+.icon-btn{width:32px;height:32px;border-radius:50%;background:var(--bg2);border:1px solid var(--bdr2);color:var(--t0);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.icon-btn.live{border-color:var(--grn);background:var(--grn3);color:var(--grn)}
 
 /* BUS BAR */
 .bus-bar{background:var(--bg1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:6px 10px;gap:6px;flex-shrink:0}
@@ -161,6 +164,41 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t0);font
 .hist-d{font-size:13px;font-weight:500;color:var(--t0)}
 .hist-dt{font-size:11px;color:var(--t2);margin-top:1px}
 .hist-amt{font-size:14px;font-weight:600;font-family:var(--fm);color:var(--grn)}
+
+/* MYRIDE */
+.myride-shell{display:flex;flex-direction:column;gap:16px}
+.myride-slot-switch{display:flex;gap:8px;background:var(--bg1);border:1px solid var(--bdr);border-radius:16px;padding:6px}
+.myride-slot-btn{flex:1;padding:10px 12px;border:none;border-radius:12px;background:transparent;color:var(--t2);font-family:var(--fh);font-size:13px;font-weight:700;cursor:pointer}
+.myride-slot-btn.active{background:var(--grn);color:#0d1f0f}
+.myride-card{background:linear-gradient(180deg,#17311e 0%,#122217 100%);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:18px;box-shadow:0 12px 28px rgba(0,0,0,.28)}
+.myride-card-light{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;overflow:hidden}
+.myride-route{display:grid;grid-template-columns:20px 1fr;gap:12px;align-items:start;margin-bottom:16px}
+.myride-dots{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:8px}
+.myride-dot{width:10px;height:10px;border-radius:50%}
+.myride-dot.pickup{background:#fbbf24}
+.myride-dot.drop{background:#60a5fa}
+.myride-line{width:2px;flex:1;min-height:50px;background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,.12))}
+.myride-field label{display:block;font-size:12px;color:var(--t2);margin-bottom:6px}
+.myride-field + .myride-field{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+.myride-action-row{display:flex;gap:10px;margin-top:16px}
+.myride-upcoming-head{font-family:var(--fh);font-size:12px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em}
+.myride-ride-card{margin-top:10px;background:#f8efcf;color:#1b2730;border-radius:22px;overflow:hidden;border:1px solid rgba(12,20,25,.08)}
+.myride-ride-main{padding:18px}
+.myride-date{font-size:13px;color:#5e676d;margin-bottom:12px}
+.myride-ride-route{display:grid;grid-template-columns:90px 20px 1fr;gap:10px;align-items:start}
+.myride-time{font-family:var(--fh);font-size:18px;font-weight:700;color:#14212a}
+.myride-mini-dots{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:6px}
+.myride-ride-stop{font-size:14px;font-weight:600;color:#14212a;line-height:1.35}
+.myride-ride-stop + .myride-ride-stop{margin-top:12px}
+.myride-ride-actions{display:flex;gap:12px;padding:14px 18px;background:#fff}
+.myride-ride-actions .btn-ghost{flex:1;color:#0f2230;border-color:rgba(15,34,48,.18)}
+.myride-ride-actions .btn-primary{flex:1;background:#0f2f45;color:#fff}
+.myride-manage-summary{background:var(--bg2);border:1px solid var(--bdr);border-radius:16px;padding:14px 16px;margin-bottom:14px;color:var(--t1);font-size:13px}
+.manage-ride-action{width:100%;display:flex;gap:12px;align-items:flex-start;padding:14px 2px;border:none;border-bottom:1px solid var(--bdr);background:transparent;color:var(--t0);text-align:left;cursor:pointer}
+.manage-ride-action:last-child{border-bottom:none}
+.manage-ride-action small{color:var(--t2)}
+.manage-ride-action.danger strong,.manage-ride-action.danger .manage-ride-icon{color:var(--red)}
+.manage-ride-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--bg2);flex-shrink:0}
 
 /* MODALS */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:40;backdrop-filter:blur(3px)}

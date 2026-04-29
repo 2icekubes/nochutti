@@ -27,6 +27,8 @@ const S = {
   demoInterval: null,
   notifiedEvents: [],
   driverInfo: { 1: null, 2: null },
+  myRideDraft: { am: { pickup: '', drop: '' }, pm: { pickup: '', drop: '' } },
+  myRideManageSlot: 'am',
 };
 
 const DB_READY = () => firebaseReady && db;
@@ -86,16 +88,93 @@ function getStopValueAtIndex(index, slot = S.slot) {
   return stop ? stop.name : '';
 }
 
+function createEmptySavedRides() {
+  return { am: null, pm: null };
+}
+
+function normalizeSavedRideEntry(ride, slot) {
+  if (!ride) return null;
+  const pickup = ride.pickup || ride.boardingStop || ride.stop || '';
+  const drop = ride.drop || ride.dropStop || '';
+  if (!pickup || !drop) return null;
+  return {
+    slot,
+    pickup,
+    drop,
+    savedAt: ride.savedAt || new Date().toISOString(),
+  };
+}
+
+function normalizeSavedRides(rider) {
+  const rides = createEmptySavedRides();
+  if (rider?.savedRides) {
+    rides.am = normalizeSavedRideEntry(rider.savedRides.am, 'am');
+    rides.pm = normalizeSavedRideEntry(rider.savedRides.pm, 'pm');
+  } else if (rider?.boardingStop || rider?.dropStop || rider?.stop) {
+    rides.am = normalizeSavedRideEntry({
+      pickup: rider.boardingStop || rider.stop || '',
+      drop: rider.dropStop || rider.boardingStop || rider.stop || '',
+    }, 'am');
+  }
+  return rides;
+}
+
+function getRideForSlot(rider = S.user, slot = S.slot) {
+  const rides = normalizeSavedRides(rider);
+  return rides[slot] || null;
+}
+
+function getCurrentRide(slot = S.slot, rider = S.user) {
+  return getRideForSlot(rider, slot);
+}
+
+function buildRiderRecord(base = {}, overrides = {}) {
+  const merged = { ...base, ...overrides };
+  const savedRides = createEmptySavedRides();
+  const incoming = overrides.savedRides || merged.savedRides || {};
+  savedRides.am = normalizeSavedRideEntry(incoming.am, 'am');
+  savedRides.pm = normalizeSavedRideEntry(incoming.pm, 'pm');
+  if (!savedRides.am && (merged.boardingStop || merged.stop || merged.dropStop)) {
+    savedRides.am = normalizeSavedRideEntry({
+      pickup: merged.boardingStop || merged.stop || '',
+      drop: merged.dropStop || merged.boardingStop || merged.stop || '',
+    }, 'am');
+  }
+  merged.savedRides = savedRides;
+  merged.stop = savedRides.am?.pickup || merged.stop || '';
+  merged.boardingStop = savedRides.am?.pickup || merged.boardingStop || merged.stop || '';
+  merged.dropStop = savedRides.pm?.drop || savedRides.am?.drop || merged.dropStop || '';
+  return merged;
+}
+
+function syncRideDraftFromSavedRides(rider = S.user) {
+  ['am', 'pm'].forEach(slot => {
+    const ride = getRideForSlot(rider, slot);
+    S.myRideDraft[slot] = {
+      pickup: ride?.pickup || '',
+      drop: ride?.drop || '',
+    };
+  });
+}
+
+function getDropOptionsForPickup(pickup, slot = S.slot) {
+  const stops = getStopsForSlot(slot);
+  const startIndex = stops.findIndex(stop => stopMatchesValue(stop, pickup));
+  return startIndex >= 0 ? stops.slice(startIndex + 1) : [];
+}
+
 function getRiderBoardingStop(rider = S.user) {
-  return rider?.boardingStop || rider?.stop || '';
+  return getRideForSlot(rider, 'am')?.pickup || rider?.boardingStop || rider?.stop || '';
 }
 
 function getRiderDropStop(rider = S.user) {
-  return rider?.dropStop || '';
+  return getRideForSlot(rider, 'pm')?.drop || rider?.dropStop || '';
 }
 
 function getRiderActiveStop(rider = S.user, slot = S.slot) {
-  return getRiderBoardingStop(rider);
+  const ride = getRideForSlot(rider, slot);
+  if (!ride) return slot === 'pm' ? getRiderDropStop(rider) || getRiderBoardingStop(rider) : getRiderBoardingStop(rider);
+  return rider?.onboarded ? ride.drop : ride.pickup;
 }
 
 function getRiderRouteLabel(rider = S.user) {
@@ -118,6 +197,13 @@ function getStopOrderMap(slot = S.slot) {
 
 function stopMatchesValue(stop, value) {
   return !!value && (stop.name === value || stop.id === value || stop.aliases?.includes(value));
+}
+
+function getRiderRouteLabel(rider = S.user) {
+  const ride = getRideForSlot(rider, S.slot) || getRideForSlot(rider, 'am') || getRideForSlot(rider, 'pm');
+  const pickup = ride?.pickup || getRiderBoardingStop(rider);
+  const drop = ride?.drop || getRiderDropStop(rider);
+  return drop && drop !== pickup ? `${pickup} -> ${drop}` : pickup;
 }
 
 function rideColor(rides) {
@@ -358,7 +444,12 @@ function checkProximity(busN, lat, lng) {
   if (S.user?.role?.startsWith('driver')) return;
   if (busN !== S.bus) return;
 
-  const stop = findStopByValue(getRiderActiveStop(S.user));
+  const targetStopValue = getRiderActiveStop(S.user);
+  if (!targetStopValue) {
+    el.textContent = `Book your ${S.slot.toUpperCase()} ride in MyRide`;
+    return;
+  }
+  const stop = findStopByValue(targetStopValue);
   if (!stop) return;
 
   const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
@@ -396,7 +487,12 @@ function updateETA(lat, lng) {
     return;
   }
 
-  const stop = findStopByValue(getRiderActiveStop(S.user));
+  const targetStopValue = getRiderActiveStop(S.user);
+  if (!targetStopValue) {
+    el.textContent = `Book your ${S.slot.toUpperCase()} ride in MyRide`;
+    return;
+  }
+  const stop = findStopByValue(targetStopValue);
   if (!stop) return;
   const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
   if (d < 0.05) { el.textContent = `Bus ${S.bus} is at your stop! 🎉`; return; }
@@ -474,15 +570,18 @@ function sweepMidnight() {
 
 function listenRiders() {
   if (!DB_READY()) {
-    S.riders = DEMO_RIDERS;
+    S.riders = Object.fromEntries(Object.entries(DEMO_RIDERS).map(([id, rider]) => [id, buildRiderRecord(rider)]));
+    syncRideDraftFromSavedRides(S.riders[S.user?.id] || S.user);
     sweepMidnight();
-    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
+    renderRiders(); renderWallet(); renderMyRide(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
     return;
   }
   dbOnValue('riders', snap => {
-    S.riders = snap.val() || {};
+    const raw = snap.val() || {};
+    S.riders = Object.fromEntries(Object.entries(raw).map(([id, rider]) => [id, buildRiderRecord(rider)]));
+    syncRideDraftFromSavedRides(S.riders[S.user?.id] || S.user);
     sweepMidnight();
-    renderRiders(); renderWallet(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
+    renderRiders(); renderWallet(); renderMyRide(); updateOccupancy(); updateCheckinBtn(); updateStopPopups();
   });
 }
 
@@ -586,6 +685,7 @@ window.selectSlot = function(slot) {
   renderStopMarkers();
   updateTopbarCtx();
   updateCheckinBtn();
+  renderMyRide();
 };
 
 function updateTopbarCtx() {
@@ -718,14 +818,13 @@ function stopRiderLocation() {
 }
 
 function updateRiderLocationBtn() {
-  const btn = $('btn-rider-loc');
+  const btn = $('btn-rider-loc-top');
   if (!btn) return;
+  btn.classList.remove('hidden');
   if (S.riderBroadcasting) {
-    btn.style.borderColor = 'var(--grn)';
-    btn.style.background = 'rgba(74,222,128,0.1)';
+    btn.classList.add('live');
   } else {
-    btn.style.borderColor = 'var(--bdr)';
-    btn.style.background = 'var(--bg1)';
+    btn.classList.remove('live');
   }
 }
 
@@ -809,8 +908,9 @@ window.toggleCheckin = function() {
     }
   }
 
-  const updated = { ...(S.riders[id] || { name: S.user.name, stop: getRiderBoardingStop(S.user), boardingStop: getRiderBoardingStop(S.user), dropStop: getRiderDropStop(S.user), rides:0, maxRides:5, payments:[] }),
-    checkedIn: newStatus, busToday: busAssigned, lastCheckin: today() };
+  const updated = buildRiderRecord(S.riders[id] || { name: S.user.name, rides:0, maxRides:5, payments:[] }, {
+    checkedIn: newStatus, busToday: busAssigned, lastCheckin: today()
+  });
 
   if (DB_READY()) {
     dbSet(`riders/${id}`, updated);
@@ -1073,6 +1173,192 @@ function renderDriverWallet(el) {
     </div>`;
 }
 
+function getSlotRideDateLabel(slot = S.slot) {
+  const now = new Date();
+  const next = new Date(now);
+  next.setDate(now.getDate() + 1);
+  return next.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+function populateMyRideSelectors() {
+  const pickupSelect = $('myride-pickup');
+  const dropSelect = $('myride-drop');
+  if (!pickupSelect || !dropSelect) return;
+  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '' };
+  pickupSelect.innerHTML = `<option value="">Select pickup...</option>${getStopsForSlot().map(stop => `<option value="${stop.name}" ${draft.pickup === stop.name ? 'selected' : ''}>${stop.name}</option>`).join('')}`;
+  const dropOptions = getDropOptionsForPickup(draft.pickup, S.slot);
+  dropSelect.innerHTML = `<option value="">Select drop...</option>${dropOptions.map(stop => `<option value="${stop.name}" ${draft.drop === stop.name ? 'selected' : ''}>${stop.name}</option>`).join('')}`;
+}
+
+function renderMyRide() {
+  const el = $('myride-inner');
+  if (!el || S.user?.role?.startsWith('driver')) return;
+  const ride = getCurrentRide();
+  const slotLabel = CONFIG.SLOTS[S.slot].label;
+  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '' };
+  el.innerHTML = `
+    <div class="myride-shell">
+      <div class="panel-titlerow">
+        <h2 class="panel-title">MyRide</h2>
+        <button class="panel-close" onclick="goTab('map')">✕</button>
+      </div>
+      <div class="myride-slot-switch">
+        <button type="button" class="myride-slot-btn${S.slot === 'am' ? ' active' : ''}" onclick="switchMyRideSlot('am')">AM Ride</button>
+        <button type="button" class="myride-slot-btn${S.slot === 'pm' ? ' active' : ''}" onclick="switchMyRideSlot('pm')">PM Ride</button>
+      </div>
+      <div class="myride-card">
+        <div class="myride-route">
+          <div class="myride-dots">
+            <span class="myride-dot pickup"></span>
+            <span class="myride-line"></span>
+            <span class="myride-dot drop"></span>
+          </div>
+          <div>
+            <div class="myride-field">
+              <label>Pickup</label>
+              <select class="inp" id="myride-pickup"></select>
+            </div>
+            <div class="myride-field">
+              <label>Dropoff</label>
+              <select class="inp" id="myride-drop"></select>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn-primary full" id="btn-save-myride">${ride ? 'Save ride changes' : 'Save my ride'}</button>
+      </div>
+      ${ride ? `
+        <div>
+          <div class="myride-upcoming-head">Upcoming Rides</div>
+          <div class="myride-ride-card">
+            <div class="myride-ride-main">
+              <div class="myride-date">${getSlotRideDateLabel(S.slot)}</div>
+              <div class="myride-ride-route">
+                <div>
+                  <div class="myride-time">${slotLabel}</div>
+                  <div class="myride-time" style="opacity:.72;margin-top:18px">${CONFIG.SLOTS[S.slot].time}</div>
+                </div>
+                <div class="myride-mini-dots">
+                  <span class="myride-dot pickup"></span>
+                  <span class="myride-line"></span>
+                  <span class="myride-dot drop"></span>
+                </div>
+                <div>
+                  <div class="myride-ride-stop">${ride.pickup}</div>
+                  <div class="myride-ride-stop">${ride.drop}</div>
+                </div>
+              </div>
+            </div>
+            <div class="myride-ride-actions">
+              <button type="button" class="btn-ghost" onclick="openManageRide('${S.slot}')">Manage Ride</button>
+              <button type="button" class="btn-primary" onclick="trackRide('${S.slot}')">Track Ride</button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+    </div>`;
+  populateMyRideSelectors();
+  $('btn-save-myride')?.addEventListener('click', saveMyRide);
+  $('myride-pickup')?.addEventListener('change', event => {
+    S.myRideDraft[S.slot].pickup = event.target.value;
+    S.myRideDraft[S.slot].drop = '';
+    populateMyRideSelectors();
+  });
+  $('myride-drop')?.addEventListener('change', event => {
+    S.myRideDraft[S.slot].drop = event.target.value;
+  });
+}
+
+window.switchMyRideSlot = function(slot) {
+  selectSlot(slot);
+  goTab('myride');
+};
+
+window.saveMyRide = function() {
+  const rider = S.riders[S.user?.id] || {};
+  const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '' };
+  if (!draft.pickup || !draft.drop) {
+    toast('Select both pickup and drop');
+    return;
+  }
+  const savedRides = normalizeSavedRides(rider);
+  savedRides[S.slot] = { slot: S.slot, pickup: draft.pickup, drop: draft.drop, savedAt: new Date().toISOString() };
+  const updated = buildRiderRecord(rider, { name: S.user.name, phone: S.user.phone, savedRides });
+  S.riders[S.user.id] = updated;
+  S.user = buildRiderRecord(S.user, { savedRides });
+  localStorage.setItem('nc_user', JSON.stringify(S.user));
+  if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
+  renderMyRide();
+  renderRiders();
+  updateETA(S.busPositions[S.bus]?.lat || CONFIG.MAP_CENTER[0], S.busPositions[S.bus]?.lng || CONFIG.MAP_CENTER[1]);
+  toast('Ride saved');
+};
+
+window.openManageRide = function(slot) {
+  const ride = getRideForSlot(S.riders[S.user?.id], slot);
+  if (!ride) return;
+  S.myRideManageSlot = slot;
+  $('manage-ride-summary').textContent = `${slot.toUpperCase()} · ${ride.pickup} -> ${ride.drop}`;
+  openModal('modal-manage-ride');
+};
+
+window.manageRideEdit = function() {
+  closeModal();
+  goTab('myride');
+};
+
+window.manageRideCancel = function() {
+  const rider = S.riders[S.user?.id] || {};
+  const savedRides = normalizeSavedRides(rider);
+  savedRides[S.myRideManageSlot] = null;
+  const updated = buildRiderRecord(rider, { savedRides });
+  S.riders[S.user.id] = updated;
+  S.user = buildRiderRecord(S.user, { savedRides });
+  localStorage.setItem('nc_user', JSON.stringify(S.user));
+  if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
+  closeModal();
+  renderMyRide();
+  toast('Ride cancelled');
+};
+
+window.manageRideReschedule = function() {
+  const from = S.myRideManageSlot;
+  const to = from === 'am' ? 'pm' : 'am';
+  const rider = S.riders[S.user?.id] || {};
+  const savedRides = normalizeSavedRides(rider);
+  if (savedRides[to]) {
+    toast(`A ${to.toUpperCase()} ride is already saved`);
+    return;
+  }
+  savedRides[to] = savedRides[from] ? { ...savedRides[from], slot: to, savedAt: new Date().toISOString() } : null;
+  savedRides[from] = null;
+  const carried = { ...(S.myRideDraft[from] || { pickup: '', drop: '' }) };
+  const targetStops = getStopsForSlot(to);
+  const pickupValid = targetStops.some(stop => stopMatchesValue(stop, carried.pickup));
+  const dropValid = targetStops.some(stop => stopMatchesValue(stop, carried.drop));
+  S.myRideDraft[to] = {
+    pickup: pickupValid ? carried.pickup : '',
+    drop: dropValid ? carried.drop : '',
+  };
+  S.myRideDraft[from] = { pickup: '', drop: '' };
+  const updated = buildRiderRecord(rider, { savedRides });
+  S.riders[S.user.id] = updated;
+  S.user = buildRiderRecord(S.user, { savedRides });
+  localStorage.setItem('nc_user', JSON.stringify(S.user));
+  if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
+  closeModal();
+  selectSlot(to);
+  goTab('myride');
+  renderMyRide();
+  toast(`Ride moved to ${to.toUpperCase()}`);
+};
+
+window.trackRide = function(slot) {
+  selectSlot(slot);
+  goTab('map');
+  const pos = S.busPositions[S.bus];
+  if (pos) updateETA(pos.lat, pos.lng);
+};
+
 // ── Payment modal ─────────────────────────────
 window.openPay = function(id) {
   S.selectedRider = id;
@@ -1144,14 +1430,16 @@ window.removeRider = function() {
 
 // ── Tab nav ───────────────────────────────────
 window.goTab = function(tab) {
-  ['map','riders','wallet'].forEach(t=>{
+  ['map','riders','wallet','myride'].forEach(t=>{
     $(`tab-${t}`)?.classList.toggle('active', t===tab);
   });
   $('panel-riders').classList.toggle('hidden', tab!=='riders');
   $('panel-wallet').classList.toggle('hidden', tab!=='wallet');
+  $('panel-myride')?.classList.toggle('hidden', tab!=='myride');
   if (tab==='map') setTimeout(()=>map?.resize(), 100);
   if (tab==='riders') renderRiders();
   if (tab==='wallet') renderWallet();
+  if (tab==='myride') renderMyRide();
 };
 
 // ── Modal ─────────────────────────────────────
@@ -1173,29 +1461,19 @@ window.closeModal = function() {
 window.openSettings = function() {
   $('s-name').value = S.user?.name||'';
   const isDriver = S.user?.role?.startsWith('driver');
-  const stopRow = $('s-stop-row');
-  const dropRow = $('s-drop-row');
   const busRow = $('s-bus-row');
   if (isDriver) {
-    if (stopRow) stopRow.style.display = 'none';
-    if (dropRow) dropRow.style.display = 'none';
     if (busRow) { busRow.style.display = 'block'; $('s-bus-display').textContent = `Bus ${S.user.role.slice(-1)} (${S.user.name})`; }
   } else {
-    if (stopRow) stopRow.style.display = 'block';
-    if (dropRow) dropRow.style.display = 'block';
     if (busRow) busRow.style.display = 'none';
-    populateBoardingSelect($('s-stop'), getRiderBoardingStop(S.user));
-    populateDropSelect($('s-stop').value, $('s-drop'), getRiderDropStop(S.user));
   }
   openModal('modal-settings');
 };
 window.saveSettings = function() {
   const name = $('s-name').value.trim();
   const isDriver = S.user?.role?.startsWith('driver');
-  const boardingStop = isDriver ? getRiderBoardingStop(S.user) : $('s-stop').value;
-  const dropStop = isDriver ? getRiderDropStop(S.user) : $('s-drop').value;
-  if (!name || (!isDriver && (!boardingStop || !dropStop))) { toast('Fill all fields'); return; }
-  S.user = {...S.user, name, stop: boardingStop, boardingStop, dropStop};
+  if (!name) { toast('Fill all fields'); return; }
+  S.user = buildRiderRecord(S.user, { name });
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   $('avatar-btn').textContent = initials(name);
 
@@ -1205,17 +1483,12 @@ window.saveSettings = function() {
     dbUpdateValues({ [`driverInfo/driver${busNum}/name`]: name });
     updateBusPopup(parseInt(busNum));
   } else if (!isDriver) {
-    const nextRider = {
-      ...(S.riders[S.user.id] || {}),
-      name,
-      stop: boardingStop,
-      boardingStop,
-      dropStop,
-    };
+    const nextRider = buildRiderRecord(S.riders[S.user.id] || {}, { name });
     S.riders[S.user.id] = nextRider;
     if (DB_READY()) dbSet(`riders/${S.user.id}`, nextRider);
     renderRiders();
     renderWallet();
+    renderMyRide();
   }
 
   closeModal(); toast('Saved ✓');
@@ -1249,9 +1522,8 @@ window.pickRole = function(r) {
     $('rider-fields').classList.add('hidden');
     $('driver-pin-row').classList.remove('hidden');
   } else {
-    $('rider-fields').classList.remove('hidden');
+    $('rider-fields').classList.add('hidden');
     $('driver-pin-row').classList.add('hidden');
-    populateSetupStops();
   }
 };
 
@@ -1286,8 +1558,7 @@ function populateDropSelect(boardingStop, selectEl, selectedValue = '') {
 }
 
 function populateSetupStops() {
-  populateBoardingSelect($('setup-stop'));
-  populateDropSelect($('setup-stop').value, $('setup-drop'));
+  return;
 }
 
 window.doSetup = function() {
@@ -1298,10 +1569,7 @@ window.doSetup = function() {
   if (!phone || phone.length !== 10) { toast('Enter a valid 10-digit mobile number'); return; }
 
   if (_role === 'rider') {
-    const stop = $('setup-stop').value;
-    const dropStop = $('setup-drop').value;
     const code = $('setup-code').value.trim().toLowerCase();
-    if (!stop || !dropStop) { toast('Select both boarding and drop locations'); return; }
     if (code !== CONFIG.JOIN_CODE) { toast('Wrong join code — ask your driver'); return; }
   } else {
     const pin = $('driver-pin').value;
@@ -1315,9 +1583,7 @@ window.doSetup = function() {
     ? `r_${phone}`
     : `${_role}_main`;
 
-  const stopVal = _role === 'rider' ? $('setup-stop').value : '';
-  const dropStopVal = _role === 'rider' ? $('setup-drop').value : '';
-  const user = { name, phone, stop: stopVal, boardingStop: stopVal, dropStop: dropStopVal, role: _role, id };
+  const user = buildRiderRecord({ name, phone, role: _role, id });
   localStorage.setItem('nc_user', JSON.stringify(user));
 
   // Register rider in Firebase
@@ -1332,9 +1598,7 @@ window.doSetup = function() {
       ...existing,
       name,
       phone,
-      stop: stopVal,
-      boardingStop: stopVal,
-      dropStop: dropStopVal,
+      savedRides: normalizeSavedRides(existing),
     });
   }
 
@@ -1365,6 +1629,8 @@ async function launch() {
   const isDriver = u.role.startsWith('driver');
   $('driver-overlay').style.display = isDriver ? 'flex' : 'none';
   $('rider-checkin-overlay').style.display = isDriver ? 'none' : 'flex';
+  $('btn-rider-loc-top')?.classList.toggle('hidden', isDriver);
+  if ($('tab-myride')) $('tab-myride').style.display = isDriver ? 'none' : 'flex';
 
   await initMap();
   listenBusPositions();
@@ -1381,6 +1647,8 @@ async function launch() {
   if (!isDriver) {
     // Slight delay then update check-in button
     setTimeout(updateCheckinBtn, 800);
+    syncRideDraftFromSavedRides(u);
+    updateRiderLocationBtn();
   }
 
   // Auto-select rider's bus if they're already checked in
@@ -1411,6 +1679,7 @@ window.addEventListener('DOMContentLoaded', () => {
   bindClick('btn-hard-refresh', hardRefresh);
   bindClick('btn-hard-refresh-settings', hardRefresh);
   bindClick('avatar-btn', openSettings);
+  bindClick('btn-rider-loc-top', toggleRiderLocation);
   bindClick('bustab-1', () => selectBus(1));
   bindClick('bustab-2', () => selectBus(2));
   bindClick('sp-am', () => selectSlot('am'));
@@ -1420,10 +1689,10 @@ window.addEventListener('DOMContentLoaded', () => {
   bindClick('btn-end-trip', endTrip);
   bindClick('btn-checkin', toggleCheckin);
   bindClick('btn-onboard', toggleOnboard);
-  bindClick('btn-rider-loc', toggleRiderLocation);
   bindClick('tab-map', () => goTab('map'));
   bindClick('tab-riders', () => goTab('riders'));
   bindClick('tab-wallet', () => goTab('wallet'));
+  bindClick('tab-myride', () => goTab('myride'));
   bindClick('btn-panel-close', () => goTab('map'));
   bindClick('btn-confirm-pay', confirmPay);
   bindClick('btn-remove-rider', removeRider);
@@ -1431,6 +1700,9 @@ window.addEventListener('DOMContentLoaded', () => {
   bindClick('btn-reset-app', resetApp);
   bindClick('btn-confirm-end-trip', confirmEndTrip);
   bindClick('btn-cancel-end-trip', closeModal);
+  bindClick('btn-manage-edit', manageRideEdit);
+  bindClick('btn-manage-reschedule', manageRideReschedule);
+  bindClick('btn-manage-cancel', manageRideCancel);
   bindClick('backdrop', closeModal);
   bindAllClick('.modal-x', closeModal);
 
@@ -1453,11 +1725,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('nc_user');
     if (saved) {
       try {
-        S.user = JSON.parse(saved);
+        S.user = buildRiderRecord(JSON.parse(saved));
         if (S.user?.role === 'rider') {
-          S.user.boardingStop = getRiderBoardingStop(S.user);
-          S.user.stop = S.user.boardingStop;
-          S.user.dropStop = getRiderDropStop(S.user);
           localStorage.setItem('nc_user', JSON.stringify(S.user));
         }
         launch().catch(handleLaunchError);

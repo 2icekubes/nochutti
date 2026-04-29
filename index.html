@@ -16,7 +16,6 @@
 </head>
 <body>
 
-<!-- SPLASH -->
 <div id="splash" class="splash">
   <div class="splash-inner">
     <div class="splash-bus">🚌</div>
@@ -25,7 +24,6 @@
   </div>
 </div>
 
-<!-- SETUP SCREEN -->
 <div id="screen-setup" class="screen hidden">
   <div class="setup-scroll">
     <div class="setup-header">
@@ -61,17 +59,9 @@
       </div>
 
       <div id="rider-fields" class="hidden mt">
-        <div class="field-label">Your boarding stop</div>
-        <select id="setup-stop" class="inp">
-          <option value="">Select stop…</option>
-        </select>
-        <div class="field-label mt">Your drop location</div>
-        <select id="setup-drop" class="inp">
-          <option value="">Select drop locationâ€¦</option>
-        </select>
         <div class="field-label mt">Group join code</div>
         <input type="text" id="setup-code" class="inp" placeholder="Ask your driver or admin" autocapitalize="none">
-        <div class="hint">Your group has a shared code. Ask on WhatsApp.</div>
+        <div class="hint">Pickup and drop will be selected later in MyRide.</div>
       </div>
 
       <div id="driver-pin-row" class="hidden mt">
@@ -85,27 +75,23 @@
   </div>
 </div>
 
-<!-- MAIN APP -->
 <div id="app" class="hidden">
-
-  <!-- IN-APP NOTIFICATION -->
   <div id="in-app-notification" class="in-app-notification">
     <div class="ian-icon">🔔</div>
     <div class="ian-text" id="ian-text">Notification text</div>
   </div>
 
-  <!-- TOPBAR -->
   <div class="topbar" id="topbar">
     <div class="topbar-left">
       <div class="wordmark-sm">No<span>Chutti</span></div>
       <div class="topbar-ctx" id="topbar-ctx">Loading…</div>
     </div>
     <div class="topbar-right">
+      <button type="button" class="icon-btn hidden" id="btn-rider-loc-top" aria-label="Share my location">📍</button>
       <button type="button" class="avatar-btn" id="avatar-btn">?</button>
     </div>
   </div>
 
-  <!-- BUS SELECTOR (2 buses) -->
   <div class="bus-bar" id="bus-bar">
     <button type="button" class="bus-tab active" id="bustab-1">
       <span class="bus-tab-icon">🚌</span>
@@ -118,30 +104,25 @@
       <span class="bus-tab-label">Bus 2</span>
       <span class="bus-tab-sub" id="bustab-2-sub">6:20 pm</span>
     </button>
-    <!-- Slot pills -->
     <div class="slot-pills">
       <button type="button" class="slot-pill active" id="sp-am">AM</button>
       <button type="button" class="slot-pill" id="sp-pm">PM</button>
     </div>
   </div>
 
-  <!-- MAP AREA -->
   <div id="map-wrap" class="map-wrap">
     <div id="map"></div>
 
-    <!-- ETA chip -->
     <div class="map-top-overlay">
       <div class="eta-chip" id="eta-chip">
         <span id="eta-text">Locating bus…</span>
       </div>
-      <!-- Bus status badges -->
       <div class="bus-badges">
         <div class="bus-badge" id="badge-bus1">🚌 <span id="b1-status">–</span></div>
         <div class="bus-badge" id="badge-bus2">🚐 <span id="b2-status">–</span></div>
       </div>
     </div>
 
-    <!-- Driver bottom controls -->
     <div class="map-bottom-overlay" id="driver-overlay" style="display:none">
       <button type="button" class="btn-broadcast" id="btn-broadcast">
         <span id="bc-icon">📡</span> <span id="bc-label">Start Trip and Broadcast Location</span>
@@ -150,7 +131,6 @@
       <button type="button" class="btn-ghost" id="btn-end-trip" style="margin-top:8px; width:100%; color:var(--red); border-color:var(--red2);">🛑 End trip</button>
     </div>
 
-    <!-- Rider: check-in button for today's bus -->
     <div class="map-bottom-overlay" id="rider-checkin-overlay" style="display:none; align-items:flex-end; gap:8px;">
       <button type="button" class="btn-checkin" id="btn-checkin" style="flex:1;">
         <span id="ci-icon">✓</span> <span id="ci-label">Check in for today</span>
@@ -158,13 +138,9 @@
       <button type="button" class="btn-checkin" id="btn-onboard" style="flex:1; display:none;">
         <span id="ob-icon">🚌</span> <span id="ob-label">Onboard bus now</span>
       </button>
-      <button type="button" id="btn-rider-loc" style="width:50px; height:50px; border-radius:50%; background:var(--bg1); border:2px solid var(--bdr); display:flex; align-items:center; justify-content:center; font-size:24px; color:var(--t0); box-shadow:0 4px 12px rgba(0,0,0,0.15); cursor:pointer; flex-shrink:0;">
-        🧭
-      </button>
     </div>
   </div>
 
-  <!-- TAB BAR -->
   <div class="tabbar">
     <button type="button" class="tab active" id="tab-map">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
@@ -178,16 +154,18 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
       <span>Wallet</span>
     </button>
+    <button type="button" class="tab" id="tab-myride">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M5 16V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8"/><path d="M8 10h8"/><path d="M8 13h5"/></svg>
+      <span>MyRide</span>
+    </button>
   </div>
 
-  <!-- PANELS (slide over map+tabs) -->
   <div id="panel-riders" class="side-panel hidden">
     <div class="panel-inner">
       <div class="panel-titlerow">
         <h2 class="panel-title">Riders</h2>
         <button type="button" class="panel-close" id="btn-panel-close">✕</button>
       </div>
-      <!-- Today's bus occupancy -->
       <div class="occ-row" id="occ-row">
         <div class="occ-card" id="occ-bus1">
           <div class="occ-label">Bus 1 today</div>
@@ -209,12 +187,13 @@
     <div class="panel-inner" id="wallet-inner"></div>
   </div>
 
-</div><!-- /app -->
+  <div id="panel-myride" class="side-panel hidden">
+    <div class="panel-inner" id="myride-inner"></div>
+  </div>
+</div>
 
-<!-- MODALS -->
 <div id="backdrop" class="backdrop hidden"></div>
 
-<!-- Pay modal -->
 <div id="modal-pay" class="modal hidden">
   <div class="modal-handle"></div>
   <div class="modal-head">
@@ -248,7 +227,6 @@
   </div>
 </div>
 
-<!-- Settings modal -->
 <div id="modal-settings" class="modal hidden">
   <div class="modal-handle"></div>
   <div class="modal-head">
@@ -258,14 +236,6 @@
   <div class="modal-body">
     <div class="field-label">Name</div>
     <input type="text" class="inp" id="s-name">
-    <div id="s-stop-row">
-      <div class="field-label mt">Stop</div>
-      <select class="inp" id="s-stop"></select>
-    </div>
-    <div id="s-drop-row">
-      <div class="field-label mt">Drop location</div>
-      <select class="inp" id="s-drop"></select>
-    </div>
     <div id="s-bus-row" style="display:none">
       <div class="field-label mt">Bus Assignment</div>
       <div class="inp" id="s-bus-display" style="background:var(--bg1);color:var(--t2)"></div>
@@ -276,7 +246,6 @@
   </div>
 </div>
 
-<!-- End Trip modal -->
 <div id="modal-end-trip" class="modal hidden">
   <div class="modal-handle"></div>
   <div class="modal-head">
@@ -296,10 +265,32 @@
   </div>
 </div>
 
+<div id="modal-manage-ride" class="modal hidden">
+  <div class="modal-handle"></div>
+  <div class="modal-head">
+    <div class="modal-title">Manage Ride</div>
+    <button type="button" class="modal-x">✕</button>
+  </div>
+  <div class="modal-body">
+    <div id="manage-ride-summary" class="myride-manage-summary"></div>
+    <button type="button" class="manage-ride-action" id="btn-manage-edit">
+      <span class="manage-ride-icon">⇄</span>
+      <span><strong>Change pickup or drop</strong><br><small>Update your saved route</small></span>
+    </button>
+    <button type="button" class="manage-ride-action" id="btn-manage-reschedule">
+      <span class="manage-ride-icon">🕘</span>
+      <span><strong>Reschedule ride</strong><br><small>Move this booking to the other slot</small></span>
+    </button>
+    <button type="button" class="manage-ride-action danger" id="btn-manage-cancel">
+      <span class="manage-ride-icon">✕</span>
+      <span><strong>Cancel ride</strong><br><small>Remove this saved booking</small></span>
+    </button>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script type="module" src="js/firebase-config.js"></script>
-    <script type="module" src="js/app.js"></script>
-  </body>
-
+<script type="module" src="js/app.js"></script>
+</body>
 </html>
