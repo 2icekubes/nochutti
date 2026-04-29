@@ -830,10 +830,10 @@ function updateRiderLocationBtn() {
 
 // endTrip uses a styled modal instead of browser confirm()
 window.endTrip = function() {
-  openModal('modal-end-trip');
+  window.openModal('modal-end-trip');
 };
 window.confirmEndTrip = function() {
-  closeModal();
+  window.closeModal();
   const busN = parseInt(S.user.role.slice(-1));
   if (S.broadcasting) stopBroadcast();
   const updates = {};
@@ -1257,7 +1257,7 @@ function renderMyRide() {
       ` : ''}
     </div>`;
   populateMyRideSelectors();
-  $('btn-save-myride')?.addEventListener('click', saveMyRide);
+  $('btn-save-myride')?.addEventListener('click', window.saveMyRide);
   $('myride-pickup')?.addEventListener('change', event => {
     S.myRideDraft[S.slot].pickup = event.target.value;
     S.myRideDraft[S.slot].drop = '';
@@ -1269,8 +1269,8 @@ function renderMyRide() {
 }
 
 window.switchMyRideSlot = function(slot) {
-  selectSlot(slot);
-  goTab('myride');
+  window.selectSlot(slot);
+  window.goTab('myride');
 };
 
 window.saveMyRide = function() {
@@ -1298,12 +1298,12 @@ window.openManageRide = function(slot) {
   if (!ride) return;
   S.myRideManageSlot = slot;
   $('manage-ride-summary').textContent = `${slot.toUpperCase()} · ${ride.pickup} -> ${ride.drop}`;
-  openModal('modal-manage-ride');
+  window.openModal('modal-manage-ride');
 };
 
 window.manageRideEdit = function() {
-  closeModal();
-  goTab('myride');
+  window.closeModal();
+  window.goTab('myride');
 };
 
 window.manageRideCancel = function() {
@@ -1315,7 +1315,7 @@ window.manageRideCancel = function() {
   S.user = buildRiderRecord(S.user, { savedRides });
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
-  closeModal();
+  window.closeModal();
   renderMyRide();
   toast('Ride cancelled');
 };
@@ -1345,16 +1345,16 @@ window.manageRideReschedule = function() {
   S.user = buildRiderRecord(S.user, { savedRides });
   localStorage.setItem('nc_user', JSON.stringify(S.user));
   if (DB_READY()) dbSet(`riders/${S.user.id}`, updated);
-  closeModal();
-  selectSlot(to);
-  goTab('myride');
+  window.closeModal();
+  window.selectSlot(to);
+  window.goTab('myride');
   renderMyRide();
   toast(`Ride moved to ${to.toUpperCase()}`);
 };
 
 window.trackRide = function(slot) {
-  selectSlot(slot);
-  goTab('map');
+  window.selectSlot(slot);
+  window.goTab('map');
   const pos = S.busPositions[S.bus];
   if (pos) updateETA(pos.lat, pos.lng);
 };
@@ -1374,7 +1374,7 @@ window.openPay = function(id) {
     </div>`;
   document.querySelectorAll('.pack').forEach(p=>p.classList.remove('on'));
   $('custom-wrap').classList.add('hidden');
-  openModal('modal-pay');
+  window.openModal('modal-pay');
 };
 
 window.pickPack = function(rides, amount, el, type) {
@@ -1412,7 +1412,7 @@ window.confirmPay = function() {
     S.riders[id] = updated;
     renderRiders(); renderWallet();
   }
-  closeModal();
+  window.closeModal();
   toast(`✓ Added ${rides} rides for ${r.name}`);
 };
 
@@ -1424,7 +1424,7 @@ window.removeRider = function() {
   }
   delete S.riders[id];
   renderRiders(); renderWallet();
-  closeModal();
+  window.closeModal();
   toast('Rider removed');
 };
 
@@ -1443,12 +1443,12 @@ window.goTab = function(tab) {
 };
 
 // ── Modal ─────────────────────────────────────
-function openModal(id) {
+window.openModal = function(id) {
   $('backdrop').classList.remove('hidden');
   const m = $(id);
   m.classList.remove('hidden');
   requestAnimationFrame(()=>m.classList.add('show'));
-}
+};
 window.closeModal = function() {
   document.querySelectorAll('.modal').forEach(m=>{
     m.classList.remove('show');
@@ -1467,7 +1467,7 @@ window.openSettings = function() {
   } else {
     if (busRow) busRow.style.display = 'none';
   }
-  openModal('modal-settings');
+  window.openModal('modal-settings');
 };
 window.saveSettings = function() {
   const name = $('s-name').value.trim();
@@ -1491,7 +1491,7 @@ window.saveSettings = function() {
     renderMyRide();
   }
 
-  closeModal(); toast('Saved ✓');
+  window.closeModal(); toast('Saved ✓');
 };
 window.resetApp = function() {
   localStorage.removeItem('nc_user');
@@ -1655,7 +1655,7 @@ async function launch() {
   setTimeout(()=>{
     if (!isDriver) {
       const r = S.riders[u.id];
-      if (r?.checkedIn && r.busToday) selectBus(r.busToday);
+      if (r?.checkedIn && r.busToday) window.selectBus(r.busToday);
     }
   }, 1000);
 }
@@ -1672,46 +1672,39 @@ window.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll(selector).forEach(el => el.addEventListener('click', handler));
   };
 
-  bindClick('rt-rider', () => pickRole('rider'));
-  bindClick('rt-driver1', () => pickRole('driver1'));
-  bindClick('rt-driver2', () => pickRole('driver2'));
-  bindClick('btn-join', doSetup);
-  bindClick('btn-hard-refresh', hardRefresh);
-  bindClick('btn-hard-refresh-settings', hardRefresh);
-  bindClick('avatar-btn', openSettings);
-  bindClick('btn-rider-loc-top', toggleRiderLocation);
-  bindClick('bustab-1', () => selectBus(1));
-  bindClick('bustab-2', () => selectBus(2));
-  bindClick('sp-am', () => selectSlot('am'));
-  bindClick('sp-pm', () => selectSlot('pm'));
-  bindClick('btn-broadcast', toggleBroadcast);
-  bindClick('btn-wa', shareWA);
-  bindClick('btn-end-trip', endTrip);
-  bindClick('btn-checkin', toggleCheckin);
-  bindClick('btn-onboard', toggleOnboard);
-  bindClick('tab-map', () => goTab('map'));
-  bindClick('tab-riders', () => goTab('riders'));
-  bindClick('tab-wallet', () => goTab('wallet'));
-  bindClick('tab-myride', () => goTab('myride'));
-  bindClick('btn-panel-close', () => goTab('map'));
-  bindClick('btn-confirm-pay', confirmPay);
-  bindClick('btn-remove-rider', removeRider);
-  bindClick('btn-save-settings', saveSettings);
-  bindClick('btn-reset-app', resetApp);
-  bindClick('btn-confirm-end-trip', confirmEndTrip);
-  bindClick('btn-cancel-end-trip', closeModal);
-  bindClick('btn-manage-edit', manageRideEdit);
-  bindClick('btn-manage-reschedule', manageRideReschedule);
-  bindClick('btn-manage-cancel', manageRideCancel);
-  bindClick('backdrop', closeModal);
-  bindAllClick('.modal-x', closeModal);
-
-  $('setup-stop')?.addEventListener('change', event => {
-    populateDropSelect(event.target.value, $('setup-drop'));
-  });
-  $('s-stop')?.addEventListener('change', event => {
-    populateDropSelect(event.target.value, $('s-drop'));
-  });
+  bindClick('rt-rider', () => window.pickRole('rider'));
+  bindClick('rt-driver1', () => window.pickRole('driver1'));
+  bindClick('rt-driver2', () => window.pickRole('driver2'));
+  bindClick('btn-join', window.doSetup);
+  bindClick('btn-hard-refresh', window.hardRefresh);
+  bindClick('btn-hard-refresh-settings', window.hardRefresh);
+  bindClick('avatar-btn', window.openSettings);
+  bindClick('btn-rider-loc-top', window.toggleRiderLocation);
+  bindClick('bustab-1', () => window.selectBus(1));
+  bindClick('bustab-2', () => window.selectBus(2));
+  bindClick('sp-am', () => window.selectSlot('am'));
+  bindClick('sp-pm', () => window.selectSlot('pm'));
+  bindClick('btn-broadcast', window.toggleBroadcast);
+  bindClick('btn-wa', window.shareWA);
+  bindClick('btn-end-trip', window.endTrip);
+  bindClick('btn-checkin', window.toggleCheckin);
+  bindClick('btn-onboard', window.toggleOnboard);
+  bindClick('tab-map', () => window.goTab('map'));
+  bindClick('tab-riders', () => window.goTab('riders'));
+  bindClick('tab-wallet', () => window.goTab('wallet'));
+  bindClick('tab-myride', () => window.goTab('myride'));
+  bindClick('btn-panel-close', () => window.goTab('map'));
+  bindClick('btn-confirm-pay', window.confirmPay);
+  bindClick('btn-remove-rider', window.removeRider);
+  bindClick('btn-save-settings', window.saveSettings);
+  bindClick('btn-reset-app', window.resetApp);
+  bindClick('btn-confirm-end-trip', window.confirmEndTrip);
+  bindClick('btn-cancel-end-trip', window.closeModal);
+  bindClick('btn-manage-edit', window.manageRideEdit);
+  bindClick('btn-manage-reschedule', window.manageRideReschedule);
+  bindClick('btn-manage-cancel', window.manageRideCancel);
+  bindClick('backdrop', window.closeModal);
+  bindAllClick('.modal-x', window.closeModal);
 
   const lName = localStorage.getItem('nc_last_name');
   const lPhone = localStorage.getItem('nc_last_phone');
