@@ -255,6 +255,19 @@ function getRiderActiveStop(rider = S.user, slot = S.slot) {
   return rider?.onboarded ? ride.drop : ride.pickup;
 }
 
+function getRiderBookedStop(rider, slot = S.slot) {
+  const ride = getRideForSlot(rider, slot);
+  if (!ride) return '';
+  return rider?.onboarded ? ride.drop : ride.pickup;
+}
+
+function isRiderBookedForStop(rider, stop, slot = S.slot, busN = null) {
+  const ride = getRideForSlot(rider, slot);
+  if (!ride) return false;
+  if (busN !== null && ride.bus !== busN) return false;
+  return stopMatchesValue(stop, getRiderBookedStop(rider, slot));
+}
+
 
 function getStopOrderMap(slot = S.slot) {
   const order = {};
@@ -738,8 +751,7 @@ function updateStopPopups(openAll) {
     const old = stopMarkers[s.id];
 
     const count = Object.values(S.riders).filter(r =>
-      r.checkedIn && stopMatchesValue(s, getRiderActiveStop(r)) &&
-      (busN === null || r.busToday === busN)
+      isRiderBookedForStop(r, s, S.slot, busN)
     ).length;
 
     const popupHtml = `
@@ -1547,6 +1559,7 @@ window.saveMyRide = function() {
   window.selectBus(selectedBus);
   renderMyRide();
   renderRiders();
+  updateStopPopups();
   updateETA();
   updateCheckinBtn();
   updateOccupancy();
