@@ -1218,7 +1218,9 @@ window.toggleOnboard = function() {
 
 
 function updateOccupancy() {
-  const riders = Object.values(S.riders);
+  const riders = Object.entries(S.riders)
+    .filter(([id, r]) => isRiderRecord(id, r))
+    .map(([, r]) => r);
   const c1 = riders.filter(r=>r.checkedIn && r.busToday===1).length;
   const c2 = riders.filter(r=>r.checkedIn && r.busToday===2).length;
   const col = n => n > 20 ? 'var(--amb)' : 'var(--grn)';
@@ -1247,6 +1249,7 @@ function renderRiders() {
   const isDriver = S.user?.role?.startsWith('driver');
 
   let entries = Object.entries(S.riders)
+    .filter(([id, r]) => isRiderRecord(id, r))
     .filter(([,r]) => r.name.toLowerCase().includes(q));
 
   // Checked-in filter (driver only)
@@ -1530,7 +1533,7 @@ function renderMyRide() {
           <div class="myride-upcoming-head">Upcoming Rides</div>
           <div class="myride-ride-card">
             <div class="myride-ride-main">
-              <div class="myride-date">${getSlotRideDateLabel(S.slot)} Â· Bus ${rideBus}</div>
+              <div class="myride-date">${getSlotRideDateLabel(S.slot)} - Bus ${rideBus}</div>
               <div class="myride-ride-route">
                 <div class="myride-route-row">
                   <div class="myride-time pickup">${pickupTime}</div>
