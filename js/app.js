@@ -221,6 +221,10 @@ function getRideForSlot(rider = S.user, slot = S.slot) {
   return rides[slot] || null;
 }
 
+function getExplicitRideForSlot(rider, slot = S.slot) {
+  return normalizeSavedRideEntry(rider?.savedRides?.[slot], slot);
+}
+
 function getCurrentRide(slot = S.slot, rider = S.user) {
   return getRideForSlot(rider, slot);
 }
@@ -279,14 +283,15 @@ function getRiderActiveStop(rider = S.user, slot = S.slot) {
 function getRiderBookedStop(rider, slot = S.slot) {
   const ride = getRideForSlot(rider, slot);
   if (!ride) return '';
-  return rider?.onboarded ? ride.drop : ride.pickup;
+  return ride.pickup;
 }
 
 function isRiderBookedForStop(rider, stop, slot = S.slot, busN = null) {
-  const ride = getRideForSlot(rider, slot);
+  const ride = getExplicitRideForSlot(rider, slot);
   if (!ride) return false;
   if (busN !== null && ride.bus !== busN) return false;
-  return stopMatchesValue(stop, getRiderBookedStop(rider, slot));
+  const pickupStop = findStopByValue(ride.pickup, slot);
+  return !!pickupStop && pickupStop.id === stop.id;
 }
 
 function getBookedRidersForStop(stop, busN, slot = S.slot) {
@@ -306,7 +311,7 @@ function getNearbyBookedRidersByLocation(busN, lat, lng, slot = S.slot) {
   return Object.entries(S.riderPositions)
     .filter(([id, pos]) => {
       const rider = S.riders[id];
-      const ride = getRideForSlot(rider, slot);
+      const ride = getExplicitRideForSlot(rider, slot);
       return pos?.lat && pos?.lng &&
         now - pos.ts < 15 * 60 * 1000 &&
         isRiderRecord(id, rider) &&
