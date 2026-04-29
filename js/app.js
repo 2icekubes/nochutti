@@ -1517,7 +1517,7 @@ window.pickRole = function(r) {
     $('rider-fields').classList.add('hidden');
     $('driver-pin-row').classList.remove('hidden');
   } else {
-    $('rider-fields').classList.add('hidden');
+    $('rider-fields').classList.remove('hidden');
     $('driver-pin-row').classList.add('hidden');
   }
 };
