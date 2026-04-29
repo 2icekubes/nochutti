@@ -18,6 +18,10 @@ const S = {
   watchId: null,
   riderBroadcasting: false,  // rider location sharing
   riderWatchId: null,
+  riderLocation: null,
+  riderPositions: {},
+  riderSnapTimer: null,
+  programmaticMapMove: false,
   riders: {},          // id → rider
   checkins: {},        // "YYYY-MM-DD" → { bus1: Set<id>, bus2: Set<id> }
   busPositions: { am: {}, pm: {} },    // slot → busN → { lat, lng, ts }
@@ -295,6 +299,24 @@ function getBookedRidersForStop(stop, busN, slot = S.slot) {
     .map(([id]) => id);
 }
 
+function getNearbyBookedRidersByLocation(busN, lat, lng, slot = S.slot) {
+  const now = Date.now();
+  const threshold = CONFIG.ONBOARD_PROXIMITY_KM || 0.2;
+  const busPoint = { lat, lng };
+  return Object.entries(S.riderPositions)
+    .filter(([id, pos]) => {
+      const rider = S.riders[id];
+      const ride = getRideForSlot(rider, slot);
+      return pos?.lat && pos?.lng &&
+        now - pos.ts < 15 * 60 * 1000 &&
+        isRiderRecord(id, rider) &&
+        !rider.onboarded &&
+        ride?.bus === busN &&
+        distanceKm(busPoint, pos) < threshold;
+    })
+    .map(([id]) => id);
+}
+
 function getNearestStop(lat, lng, slot = S.slot) {
   let nearest = null;
   let nearestDistance = Infinity;
@@ -478,7 +500,29 @@ function addRouteLine() {
 
 function setMapView(lat, lng, zoom = 15) {
   if (!map) return;
+  S.programmaticMapMove = true;
   map.easeTo({ center: toLngLat(lat, lng), zoom, duration: 0 });
+  setTimeout(() => { S.programmaticMapMove = false; }, 250);
+}
+
+function scheduleRiderMapSnap() {
+  if (S.user?.role?.startsWith('driver')) return;
+  if (!S.riderLocation) return;
+  if (!$('tab-map')?.classList.contains('active')) return;
+  clearTimeout(S.riderSnapTimer);
+  S.riderSnapTimer = setTimeout(() => {
+    if (S.riderLocation) setMapView(S.riderLocation.lat, S.riderLocation.lng, 16);
+  }, 1800);
+}
+
+function initRiderMapSnap() {
+  if (!map) return;
+  ['dragend', 'zoomend', 'rotateend', 'pitchend'].forEach(eventName => {
+    map.on(eventName, () => {
+      if (S.programmaticMapMove) return;
+      scheduleRiderMapSnap();
+    });
+  });
 }
 
 async function initMap() {
@@ -495,6 +539,7 @@ async function initMap() {
     if (map.loaded()) addRouteLine();
     else map.once('load', addRouteLine);
   }
+  initRiderMapSnap();
 
   window._stopMarkers = {};
   renderStopMarkers();
@@ -615,11 +660,20 @@ function checkProximity(busN, lat, lng) {
     const nearbyStop = getNearestStop(lat, lng, S.slot);
     const threshold = CONFIG.ONBOARD_PROXIMITY_KM || 0.2;
     if (nearbyStop && nearbyStop.distance < threshold) {
-      const riderIds = getBookedRidersForStop(nearbyStop.stop, busN, S.slot);
+      const stopRiderIds = getBookedRidersForStop(nearbyStop.stop, busN, S.slot);
+      const nearbyRiderIds = getNearbyBookedRidersByLocation(busN, lat, lng, S.slot);
+      const riderIds = [...new Set([...stopRiderIds, ...nearbyRiderIds])];
       const promptKey = `${today()}_${S.slot}_bus${busN}_${nearbyStop.stop.id}_${riderIds.join(',')}`;
       if (riderIds.length && promptKey !== S.lastOnboardPromptKey) {
         S.lastOnboardPromptKey = promptKey;
         promptDriverOnboard(riderIds, nearbyStop.stop.name);
+      }
+    } else {
+      const riderIds = getNearbyBookedRidersByLocation(busN, lat, lng, S.slot);
+      const promptKey = `${today()}_${S.slot}_bus${busN}_nearby_${riderIds.join(',')}`;
+      if (riderIds.length && promptKey !== S.lastOnboardPromptKey) {
+        S.lastOnboardPromptKey = promptKey;
+        promptDriverOnboard(riderIds, 'nearby');
       }
     }
     return;
@@ -823,11 +877,13 @@ function listenRiderPositions() {
     const data = snap.val() || {};
     const now = Date.now();
     const STALE_MS = 15 * 60 * 1000;
+    S.riderPositions = Object.fromEntries(Object.entries(data).filter(([, pos]) =>
+      pos?.lat && pos?.lng && now - pos.ts <= STALE_MS
+    ));
 
     // Add / update markers for active riders
-    Object.entries(data).forEach(([id, pos]) => {
+    Object.entries(S.riderPositions).forEach(([id, pos]) => {
       if (!pos?.lat || !pos?.lng) return;
-      if (now - pos.ts > STALE_MS) return;  // skip stale
 
       // Rider name: try S.riders first, fall back to id
       const riderName = S.riders[id]?.name || id;
@@ -849,8 +905,7 @@ function listenRiderPositions() {
 
     // Remove markers for riders who stopped sharing or went stale
     Object.keys(riderMarkers).forEach(id => {
-      const pos = data[id];
-      if (!pos || now - pos.ts > STALE_MS) {
+      if (!S.riderPositions[id]) {
         riderMarkers[id].remove();
         delete riderMarkers[id];
       }
@@ -977,18 +1032,19 @@ window.openDriverOnboardList = function() {
 
   const nearest = getNearestStop(pos.lat, pos.lng, S.slot);
   const threshold = CONFIG.ONBOARD_PROXIMITY_KM || 0.2;
-  if (!nearest || nearest.distance > threshold) {
-    toast('No boarding stop nearby');
-    return;
-  }
-
-  const riderIds = getBookedRidersForStop(nearest.stop, busN, S.slot);
+  const stopRiderIds = nearest && nearest.distance <= threshold
+    ? getBookedRidersForStop(nearest.stop, busN, S.slot)
+    : [];
+  const nearbyRiderIds = getNearbyBookedRidersByLocation(busN, pos.lat, pos.lng, S.slot);
+  const riderIds = [...new Set([...stopRiderIds, ...nearbyRiderIds])];
   if (!riderIds.length) {
-    toast(`No booked riders at ${nearest.stop.name}`);
+    toast(nearest && nearest.distance <= threshold
+      ? `No booked riders at ${nearest.stop.name}`
+      : 'No booked riders nearby');
     return;
   }
 
-  promptDriverOnboard(riderIds, nearest.stop.name);
+  promptDriverOnboard(riderIds, nearest && nearest.distance <= threshold ? nearest.stop.name : 'nearby');
 };
 
 // ── Rider Location Sharing ──────────────────────
@@ -997,7 +1053,9 @@ window.toggleRiderLocation = function() {
 };
 
 let myMarker = null;
-function startRiderLocation() {
+function startRiderLocation(options = {}) {
+  const silent = !!options.silent;
+  if (S.riderBroadcasting) return;
   if (!navigator.geolocation) { toast('Geolocation not available'); return; }
   requestWakeLock();
   const id = S.user.id;
