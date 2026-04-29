@@ -1070,12 +1070,15 @@ function startRiderLocation(options = {}) {
 
   S.riderWatchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
+    const hadLocation = !!S.riderLocation;
+    S.riderLocation = { lat, lng, ts: Date.now() };
     if (myMarker) { myMarker.setLatLng([lat, lng]); myMarker.setOpacity(1); }
-    dbSet(`riderPositions/${id}`, { lat, lng, ts: Date.now() });
+    if (!hadLocation && $('tab-map')?.classList.contains('active')) setMapView(lat, lng, 16);
+    dbSet(`riderPositions/${id}`, { lat, lng, slot: S.slot, bus: S.bus, ts: S.riderLocation.ts });
   }, err => toast('GPS: ' + err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
   S.riderBroadcasting = true;
   updateRiderLocationBtn();
-  toast('Location sharing started');
+  if (!silent) toast('Location sharing started');
   return;
   const icon = ({
     html: `<div style="width:28px;height:28px;border-radius:50%;background:rgba(248,113,113,0.25);border:1.5px solid rgba(248,113,113,0.7);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--red);">📍</div>`,
@@ -1097,6 +1100,7 @@ function stopRiderLocation() {
   if (S.riderWatchId) navigator.geolocation.clearWatch(S.riderWatchId);
   S.riderWatchId = null;
   S.riderBroadcasting = false;
+  S.riderLocation = null;
   releaseWakeLock();
   if (myMarker) { myMarker.remove(); myMarker = null; }
   dbRemove(`riderPositions/${S.user.id}`);
@@ -2093,6 +2097,7 @@ async function launch() {
     setTimeout(updateCheckinBtn, 800);
     syncRideDraftFromSavedRides(u);
     updateRiderLocationBtn();
+    setTimeout(() => startRiderLocation({ silent: true }), 1000);
   }
 
   // Auto-select rider's bus if they're already checked in
