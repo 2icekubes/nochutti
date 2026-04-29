@@ -26,6 +26,7 @@ const S = {
   demoStep: { 1: 0, 2: 5 },
   demoInterval: null,
   notifiedEvents: [],
+  lastOnboardPromptKey: '',
   driverInfo: { 1: null, 2: null },
   myRideDraft: { am: { pickup: '', drop: '', bus: 1 }, pm: { pickup: '', drop: '', bus: 1 } },
   myRideManageSlot: 'am',
@@ -50,10 +51,12 @@ function initDriverInfoListeners() {
 }
 
 // Prompt driver with nearby riders to onboard
-function promptDriverOnboard(riderIds) {
+function promptDriverOnboard(riderIds, stopName = '') {
   if (!riderIds || !riderIds.length) return;
   const listEl = $('onboard-list');
   if (!listEl) return;
+  const titleEl = document.querySelector('#modal-onboard .modal-title');
+  if (titleEl) titleEl.textContent = stopName ? `Onboard at ${stopName}` : 'Onboard riders';
   listEl.innerHTML = '';
   riderIds.forEach(id => {
     const r = S.riders[id];
@@ -63,20 +66,34 @@ function promptDriverOnboard(riderIds) {
     item.innerHTML = `<div><strong>${r.name}</strong><div style="font-size:12px;color:var(--t2)">${getRiderRouteLabel(r)}</div></div>`;
     const btn = document.createElement('button');
     btn.className = 'btn-primary'; btn.style.marginLeft = '8px'; btn.textContent = 'Onboard';
-    btn.onclick = () => confirmDriverOnboard(id);
+    btn.onclick = () => confirmDriverOnboard(id, btn);
     item.appendChild(btn);
     listEl.appendChild(item);
   });
   window.openModal('modal-onboard');
 }
 
-function confirmDriverOnboard(id) {
-  window.closeModal();
+function confirmDriverOnboard(id, btn = null) {
   const r = S.riders[id];
   if (!r) return;
-  const updated = { ...r, onboarded: true };
+  const ride = getRideForSlot(r, S.slot);
+  const busAssigned = ride?.bus || parseInt(S.user?.role?.slice(-1)) || r.busToday || S.bus;
+  const updated = buildRiderRecord(r, {
+    checkedIn: true,
+    busToday: busAssigned,
+    onboarded: true,
+    lastCheckin: today(),
+  });
+  S.riders[id] = updated;
   if (DB_READY()) dbSet(`riders/${id}`, updated);
-  else { S.riders[id] = updated; renderRiders(); updateOccupancy(); }
+  renderRiders();
+  updateOccupancy();
+  updateStopPopups();
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Onboarded';
+    btn.closest('div').style.opacity = '0.65';
+  }
   toast(`Onboarded ${r.name}`);
 }
 
@@ -86,7 +103,7 @@ function checkAutoDeboard(busN, lat, lng) {
   Object.entries(S.riders).forEach(([id, r]) => {
     if (!r.onboarded) return;
     if (r.busToday !== busN) return;
-    const drop = getRiderDropStop(r);
+    const drop = getRideForSlot(r, S.slot)?.drop || getRiderDropStop(r);
     const stop = findStopByValue(drop, S.slot);
     if (!stop) return;
     const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
@@ -266,6 +283,29 @@ function isRiderBookedForStop(rider, stop, slot = S.slot, busN = null) {
   if (!ride) return false;
   if (busN !== null && ride.bus !== busN) return false;
   return stopMatchesValue(stop, getRiderBookedStop(rider, slot));
+}
+
+function getBookedRidersForStop(stop, busN, slot = S.slot) {
+  return Object.entries(S.riders)
+    .filter(([id, r]) =>
+      isRiderRecord(id, r) &&
+      !r.onboarded &&
+      isRiderBookedForStop(r, stop, slot, busN)
+    )
+    .map(([id]) => id);
+}
+
+function getNearestStop(lat, lng, slot = S.slot) {
+  let nearest = null;
+  let nearestDistance = Infinity;
+  getStopsForSlot(slot).forEach(stop => {
+    const d = distanceKm({ lat, lng }, stop);
+    if (d < nearestDistance) {
+      nearest = stop;
+      nearestDistance = d;
+    }
+  });
+  return nearest ? { stop: nearest, distance: nearestDistance } : null;
 }
 
 function isRiderRecord(id, rider) {
@@ -572,20 +612,15 @@ function refreshBusMarkersForSlot() {
 function checkProximity(busN, lat, lng) {
   // Driver-specific proximity: prompt to onboard riders when bus nears boarding stop
   if (S.user?.role?.startsWith('driver')) {
-    // Only consider riders assigned to this bus
-    const nearby = [];
-    Object.entries(S.riders).forEach(([id, r]) => {
-      if (!r.checkedIn || r.onboarded) return;
-      if (r.busToday !== busN) return;
-      const targetStopValue = getRiderActiveStop(r, S.slot);
-      const stop = findStopByValue(targetStopValue, S.slot);
-      if (!stop) return;
-      const d = Math.sqrt(Math.pow((lat - stop.lat) * 111, 2) + Math.pow((lng - stop.lng) * 111, 2));
-      if (d < (CONFIG.ONBOARD_PROXIMITY_KM || 0.2)) nearby.push({ id, rider: r, stop, d });
-    });
-    if (nearby.length) {
-      // show onboard prompt for nearby riders (grouped)
-      promptDriverOnboard(nearby.map(x => x.id));
+    const nearbyStop = getNearestStop(lat, lng, S.slot);
+    const threshold = CONFIG.ONBOARD_PROXIMITY_KM || 0.2;
+    if (nearbyStop && nearbyStop.distance < threshold) {
+      const riderIds = getBookedRidersForStop(nearbyStop.stop, busN, S.slot);
+      const promptKey = `${today()}_${S.slot}_bus${busN}_${nearbyStop.stop.id}_${riderIds.join(',')}`;
+      if (riderIds.length && promptKey !== S.lastOnboardPromptKey) {
+        S.lastOnboardPromptKey = promptKey;
+        promptDriverOnboard(riderIds, nearbyStop.stop.name);
+      }
     }
     return;
   }
@@ -929,6 +964,31 @@ window.shareWA = function() {
     `(I'll drop a live location pin in a moment)`
   );
   window.open(`https://wa.me/?text=${msg}`, '_blank');
+};
+
+window.openDriverOnboardList = function() {
+  if (!S.user?.role?.startsWith('driver')) return;
+  const busN = parseInt(S.user.role.slice(-1));
+  const pos = getBusPosition(busN);
+  if (!isFreshPosition(pos)) {
+    toast('Start broadcasting to detect the current stop');
+    return;
+  }
+
+  const nearest = getNearestStop(pos.lat, pos.lng, S.slot);
+  const threshold = CONFIG.ONBOARD_PROXIMITY_KM || 0.2;
+  if (!nearest || nearest.distance > threshold) {
+    toast('No boarding stop nearby');
+    return;
+  }
+
+  const riderIds = getBookedRidersForStop(nearest.stop, busN, S.slot);
+  if (!riderIds.length) {
+    toast(`No booked riders at ${nearest.stop.name}`);
+    return;
+  }
+
+  promptDriverOnboard(riderIds, nearest.stop.name);
 };
 
 // ── Rider Location Sharing ──────────────────────
@@ -2006,6 +2066,7 @@ window.addEventListener('DOMContentLoaded', () => {
   bindClick('sp-am', () => window.selectSlot('am'));
   bindClick('sp-pm', () => window.selectSlot('pm'));
   bindClick('btn-broadcast', window.toggleBroadcast);
+  bindClick('btn-driver-onboard', window.openDriverOnboardList);
   bindClick('btn-wa', window.shareWA);
   bindClick('btn-checkin', window.toggleCheckin);
   bindClick('btn-onboard', window.toggleOnboard);
