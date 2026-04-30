@@ -1379,3 +1379,133 @@ body.setup-role-picked #screen-setup .card {
     padding-top: 44px;
   }
 }
+
+/* Final login fixes: no fake phone chrome; allow expanded form to scroll */
+#screen-setup {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+#screen-setup::-webkit-scrollbar {
+  display: none;
+}
+#screen-setup .setup-scroll {
+  min-height: auto;
+  padding-bottom: 28px;
+}
+#screen-setup .setup-header:before,
+#screen-setup .setup-status,
+#screen-setup .setup-location {
+  content: none !important;
+  display: none !important;
+}
+@media (max-height: 760px) {
+  body.setup-role-picked #screen-setup .setup-header {
+    min-height: 292px;
+  }
+}
+
+/* Fit expanded login in one mobile viewport */
+#screen-setup {
+  overflow: hidden !important;
+}
+body.setup-role-picked #screen-setup {
+  background-position: center, center -330px, center;
+}
+body.setup-role-picked #screen-setup .setup-scroll {
+  height: 100%;
+  padding: 14px 18px 14px;
+}
+body.setup-role-picked #screen-setup .setup-header {
+  min-height: 220px;
+  padding-top: 28px;
+  flex: 0 0 auto;
+}
+body.setup-role-picked #screen-setup .setup-wordmark {
+  font-size: clamp(32px, 9.2vw, 42px);
+}
+body.setup-role-picked #screen-setup .setup-sub {
+  font-size: 13px;
+  margin-top: 4px;
+}
+body.setup-role-picked #screen-setup .card {
+  padding: 13px 14px;
+  border-radius: 16px;
+}
+body.setup-role-picked #screen-setup .setup-proof,
+body.setup-role-picked #screen-setup .setup-refresh {
+  display: none !important;
+}
+body.setup-role-picked #screen-setup .role-row {
+  gap: 8px;
+}
+body.setup-role-picked #screen-setup .role-tile {
+  min-height: 56px;
+}
+body.setup-role-picked #screen-setup .role-emoji {
+  font-size: 16px;
+}
+body.setup-role-picked #screen-setup .role-name {
+  font-size: 13px;
+}
+body.setup-role-picked #screen-setup .role-sub {
+  font-size: 9px;
+}
+body.setup-role-picked #screen-setup .field-label {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+body.setup-role-picked #screen-setup .mt {
+  margin-top: 9px;
+}
+body.setup-role-picked #screen-setup .mt24 {
+  margin-top: 12px;
+}
+body.setup-role-picked #screen-setup .inp {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+body.setup-role-picked #screen-setup .hint {
+  display: none;
+}
+body.setup-role-picked #screen-setup .btn-primary {
+  min-height: 42px;
+  padding: 11px 16px;
+}
+@media (max-height: 760px) {
+  body.setup-role-picked #screen-setup {
+    background-position: center, center -365px, center;
+  }
+  body.setup-role-picked #screen-setup .setup-header {
+    min-height: 138px;
+    padding-top: 10px;
+  }
+  body.setup-role-picked #screen-setup .setup-wordmark {
+    font-size: 31px;
+  }
+  body.setup-role-picked #screen-setup .setup-sub {
+    font-size: 12px;
+  }
+  body.setup-role-picked #screen-setup .card {
+    padding: 10px 12px;
+  }
+  body.setup-role-picked #screen-setup .role-tile {
+    min-height: 47px;
+  }
+  body.setup-role-picked #screen-setup .inp {
+    min-height: 34px;
+    padding: 7px 11px;
+  }
+  body.setup-role-picked #screen-setup .mt {
+    margin-top: 7px;
+  }
+  body.setup-role-picked #screen-setup .mt24 {
+    margin-top: 9px;
+  }
+  body.setup-role-picked #screen-setup .btn-primary {
+    min-height: 38px;
+    padding: 9px 14px;
+  }
+}

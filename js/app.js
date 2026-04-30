@@ -2008,6 +2008,7 @@ let _role = '';
 window.pickRole = function(r) {
   _role = r;
   document.body.classList.add('setup-role-picked');
+  $('screen-setup')?.scrollTo?.({ top: 0, behavior: 'instant' });
   ['rider','driver1','driver2'].forEach(x=>$(`rt-${x}`).classList.toggle('on', x===r));
   $('common-fields').classList.remove('hidden');
   $('btn-join').disabled = false;
@@ -2237,8 +2238,14 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         launch().catch(handleLaunchError);
       }
-      catch { $('screen-setup').classList.remove('hidden'); }
+      catch {
+        document.body.classList.remove('setup-role-picked');
+        $('screen-setup')?.scrollTo?.({ top: 0, behavior: 'instant' });
+        $('screen-setup').classList.remove('hidden');
+      }
     } else {
+      document.body.classList.remove('setup-role-picked');
+      $('screen-setup')?.scrollTo?.({ top: 0, behavior: 'instant' });
       $('screen-setup').classList.remove('hidden');
     }
   }, 1800);
