@@ -1640,14 +1640,52 @@ function populateMyRideSelectors() {
   dropSelect.innerHTML = `<option value="">Select drop...</option>${dropOptions.map(stop => `<option value="${stop.name}" ${draft.drop === stop.name ? 'selected' : ''}>${stop.name}</option>`).join('')}`;
 }
 
+function renderUpcomingRideCards() {
+  const rider = S.riders[S.user?.id] || S.user;
+  const cards = ['am', 'pm'].map(slot => {
+    const ride = getRideForSlot(rider, slot);
+    if (!ride) return '';
+    const rideBus = ride.bus || 1;
+    const pickupTime = getScheduledStopTime(ride.pickup, slot, rideBus);
+    const dropTime = getScheduledStopTime(ride.drop, slot, rideBus);
+    const label = slot === 'am' ? 'AM Ride' : 'PM Ride';
+    return `
+      <div class="myride-ride-card">
+        <div class="myride-ride-main">
+          <div class="myride-date">${label} - ${getSlotRideDateLabel(slot)} - Bus ${rideBus}</div>
+          <div class="myride-ride-route">
+            <div class="myride-route-row">
+              <div class="myride-time pickup">${pickupTime}</div>
+              <span class="myride-dot pickup"></span>
+              <div class="myride-ride-stop">${ride.pickup}</div>
+            </div>
+            <div class="myride-route-row">
+              <div class="myride-time drop">${dropTime}</div>
+              <span class="myride-dot drop"></span>
+              <div class="myride-ride-stop">${ride.drop}</div>
+            </div>
+          </div>
+        </div>
+        <div class="myride-ride-actions">
+          <button type="button" class="btn-ghost" onclick="openManageRide('${slot}')">Manage Ride</button>
+          <button type="button" class="btn-primary" onclick="trackRide('${slot}')">Track Ride</button>
+        </div>
+      </div>`;
+  }).filter(Boolean).join('');
+
+  return cards ? `
+    <div>
+      <div class="myride-upcoming-head">Upcoming Rides</div>
+      <div class="myride-upcoming-list">${cards}</div>
+    </div>
+  ` : '';
+}
+
 function renderMyRide() {
   const el = $('myride-inner');
   if (!el || S.user?.role?.startsWith('driver')) return;
-  const ride = getCurrentRide();
   const draft = S.myRideDraft[S.slot] || { pickup: '', drop: '', bus: 1 };
-  const rideBus = ride?.bus || draft.bus || 1;
-  const pickupTime = ride ? getScheduledStopTime(ride.pickup, S.slot, rideBus) : getSlotBusLabel(S.slot, rideBus);
-  const dropTime = ride ? getScheduledStopTime(ride.drop, S.slot, rideBus) : '';
+  const upcomingHtml = renderUpcomingRideCards();
   el.innerHTML = `
     <div class="myride-shell">
       <div class="panel-titlerow">
@@ -1662,32 +1700,6 @@ function renderMyRide() {
         <button type="button" class="myride-bus-btn${draft.bus === 1 ? ' active' : ''}" onclick="selectMyRideBus(1)">${getMyRideBusButtonLabel(S.slot, 1)}</button>
         <button type="button" class="myride-bus-btn${draft.bus === 2 ? ' active' : ''}" onclick="selectMyRideBus(2)">${getMyRideBusButtonLabel(S.slot, 2)}</button>
       </div>
-      ${ride ? `
-        <div class="ride-overview-card">
-          <div class="ride-card-head">
-            <span>Today's Trip</span>
-            <button type="button" onclick="trackRide('${S.slot}')">View all</button>
-          </div>
-          <div class="ride-overview-route">
-            <div class="ride-overview-dots"><span></span><i></i><span></span></div>
-            <div>
-              <strong>${ride.pickup}</strong>
-              <small>Picked up - ${pickupTime}</small>
-              <strong>${ride.drop}</strong>
-              <small>Expected - ${dropTime || getSlotBusLabel(S.slot, rideBus)}</small>
-            </div>
-            <div class="ride-overview-bus">Bus ${rideBus}</div>
-          </div>
-        </div>
-        <div class="pass-card">
-          <div>
-            <span>Monthly Pass</span>
-            <strong>Office Shuttle Pass</strong>
-            <small>${ride.pickup} -> ${ride.drop}</small>
-          </div>
-          <em>Active</em>
-        </div>
-      ` : ''}
       <div class="myride-card">
         <div class="myride-route">
           <div class="myride-dots">
@@ -1708,32 +1720,7 @@ function renderMyRide() {
         </div>
         <button type="button" class="btn-primary full" id="btn-save-myride">Book my ride</button>
       </div>
-      ${ride ? `
-        <div>
-          <div class="myride-upcoming-head">Upcoming Rides</div>
-          <div class="myride-ride-card">
-            <div class="myride-ride-main">
-              <div class="myride-date">${getSlotRideDateLabel(S.slot)} - Bus ${rideBus}</div>
-              <div class="myride-ride-route">
-                <div class="myride-route-row">
-                  <div class="myride-time pickup">${pickupTime}</div>
-                  <span class="myride-dot pickup"></span>
-                  <div class="myride-ride-stop">${ride.pickup}</div>
-                </div>
-                <div class="myride-route-row">
-                  <div class="myride-time drop">${dropTime}</div>
-                  <span class="myride-dot drop"></span>
-                  <div class="myride-ride-stop">${ride.drop}</div>
-                </div>
-              </div>
-            </div>
-            <div class="myride-ride-actions">
-              <button type="button" class="btn-ghost" onclick="openManageRide('${S.slot}')">Manage Ride</button>
-              <button type="button" class="btn-primary" onclick="trackRide('${S.slot}')">Track Ride</button>
-            </div>
-          </div>
-        </div>
-      ` : ''}
+      ${upcomingHtml}
     </div>`;
   populateMyRideSelectors();
   $('btn-save-myride')?.addEventListener('click', window.saveMyRide);
