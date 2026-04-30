@@ -971,6 +971,18 @@ function updateTopbarCtx() {
 }
 
 // ── GPS Broadcast ─────────────────────────────
+function updateChromeTitle(tab = 'map') {
+  const title = {
+    map: 'Live Route',
+    myride: 'My Ride',
+    riders: 'Riders',
+    wallet: 'Wallet',
+  }[tab] || 'Live Route';
+  const titleEl = document.querySelector('#app .wordmark-sm');
+  if (titleEl) titleEl.textContent = title;
+  document.body.dataset.activeTab = tab;
+}
+
 window.toggleBroadcast = function() {
   S.broadcasting ? confirmEndTrip() : startBroadcast();
 };
@@ -1650,6 +1662,32 @@ function renderMyRide() {
         <button type="button" class="myride-bus-btn${draft.bus === 1 ? ' active' : ''}" onclick="selectMyRideBus(1)">${getMyRideBusButtonLabel(S.slot, 1)}</button>
         <button type="button" class="myride-bus-btn${draft.bus === 2 ? ' active' : ''}" onclick="selectMyRideBus(2)">${getMyRideBusButtonLabel(S.slot, 2)}</button>
       </div>
+      ${ride ? `
+        <div class="ride-overview-card">
+          <div class="ride-card-head">
+            <span>Today's Trip</span>
+            <button type="button" onclick="trackRide('${S.slot}')">View all</button>
+          </div>
+          <div class="ride-overview-route">
+            <div class="ride-overview-dots"><span></span><i></i><span></span></div>
+            <div>
+              <strong>${ride.pickup}</strong>
+              <small>Picked up - ${pickupTime}</small>
+              <strong>${ride.drop}</strong>
+              <small>Expected - ${dropTime || getSlotBusLabel(S.slot, rideBus)}</small>
+            </div>
+            <div class="ride-overview-bus">Bus ${rideBus}</div>
+          </div>
+        </div>
+        <div class="pass-card">
+          <div>
+            <span>Monthly Pass</span>
+            <strong>Office Shuttle Pass</strong>
+            <small>${ride.pickup} -> ${ride.drop}</small>
+          </div>
+          <em>Active</em>
+        </div>
+      ` : ''}
       <div class="myride-card">
         <div class="myride-route">
           <div class="myride-dots">
@@ -1884,6 +1922,7 @@ window.goTab = function(tab) {
   ['map','riders','wallet','myride'].forEach(t=>{
     $(`tab-${t}`)?.classList.toggle('active', t===tab);
   });
+  updateChromeTitle(tab);
   $('panel-riders').classList.toggle('hidden', tab!=='riders');
   $('panel-wallet').classList.toggle('hidden', tab!=='wallet');
   $('panel-myride')?.classList.toggle('hidden', tab!=='myride');
@@ -1968,6 +2007,7 @@ window.hardRefresh = function() {
 let _role = '';
 window.pickRole = function(r) {
   _role = r;
+  document.body.classList.add('setup-role-picked');
   ['rider','driver1','driver2'].forEach(x=>$(`rt-${x}`).classList.toggle('on', x===r));
   $('common-fields').classList.remove('hidden');
   $('btn-join').disabled = false;
@@ -2082,6 +2122,8 @@ async function launch() {
   $('app').classList.remove('hidden');
   $('avatar-btn').textContent = initials(u.name);
   updateTopbarCtx();
+  updateChromeTitle('map');
+  document.body.dataset.role = isDriver ? 'driver' : 'rider';
 
   // Show correct overlays
   $('driver-overlay').style.display = isDriver ? 'flex' : 'none';

@@ -26,13 +26,18 @@
 
 <div id="screen-setup" class="screen hidden">
   <div class="setup-scroll">
+    <div class="setup-status">
+      <span>9:41</span>
+      <span>///</span>
+    </div>
+    <div class="setup-location">Kolkata</div>
     <div class="setup-header">
       <div class="setup-wordmark">No<span>Chutti</span></div>
-      <p class="setup-sub">Office shuttle · Kolkata</p>
+      <p class="setup-sub">No holiday from the commute</p>
     </div>
 
     <div class="card">
-      <div class="field-label">I am the</div>
+      <div class="field-label setup-role-label">I am a</div>
       <div class="role-row">
         <div class="role-tile" id="rt-rider">
           <div class="role-emoji">🧑‍💼</div>
@@ -40,13 +45,13 @@
         </div>
         <div class="role-tile" id="rt-driver1">
           <div class="role-emoji">🚌</div>
-          <div class="role-name">Driver A</div>
-          <div class="role-sub">Bus 1</div>
+          <div class="role-name">Bus 1</div>
+          <div class="role-sub">Driver</div>
         </div>
         <div class="role-tile" id="rt-driver2">
           <div class="role-emoji">🚐</div>
-          <div class="role-name">Driver B</div>
-          <div class="role-sub">Bus 2</div>
+          <div class="role-name">Bus 2</div>
+          <div class="role-sub">Driver</div>
         </div>
       </div>
 
@@ -69,8 +74,13 @@
         <input type="password" id="driver-pin" class="inp" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
       </div>
 
-      <button type="button" class="btn-primary full mt24" id="btn-join" disabled>Select a role ↑</button>
-      <button type="button" class="btn-ghost full" style="margin-top:12px; color:var(--t2); font-size:13px; border-color:transparent; background:transparent;" id="btn-hard-refresh">↻ Force App Update</button>
+      <button type="button" class="btn-primary full mt24" id="btn-join" disabled>Select a role</button>
+      <button type="button" class="btn-ghost full setup-refresh" id="btn-hard-refresh">Force App Update</button>
+    </div>
+    <div class="setup-proof">
+      <span>Safe rides</span>
+      <span>On-time every day</span>
+      <span>Built for office commuters</span>
     </div>
   </div>
 </div>
@@ -148,7 +158,7 @@
     </button>
     <button type="button" class="tab active" id="tab-map">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
-      <span>Track</span>
+      <span>Live Route</span>
     </button>
     <button type="button" class="tab" id="tab-riders">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
