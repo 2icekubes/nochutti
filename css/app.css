@@ -619,8 +619,8 @@ body {
 }
 
 .map-wrap {
-  margin: 0 16px 0;
-  border-radius: 14px 14px 0 0;
+  margin: 0;
+  border-radius: 0;
   background:
     linear-gradient(180deg, rgba(4,16,18,.15), rgba(4,16,18,.4)),
     #09201f;
@@ -629,31 +629,32 @@ body {
   filter: saturate(.76) brightness(.56) contrast(1.18);
 }
 .map-top-overlay {
-  top: 14px;
-  width: calc(100% - 24px);
+  top: 8px;
+  width: calc(100% - 20px);
 }
 .eta-chip {
   width: 100%;
-  min-height: 90px;
+  min-height: 42px;
   border-radius: 10px;
-  padding: 16px;
+  padding: 9px 12px;
   background: linear-gradient(180deg, rgba(22,55,49,.94), rgba(11,33,30,.94));
   border-color: rgba(255,255,255,.1);
-  box-shadow: 0 18px 34px rgba(0,0,0,.32);
+  box-shadow: 0 10px 24px rgba(0,0,0,.28);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
 }
 .eta-chip:before {
   content: "Route status";
   display: block;
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   margin-right: auto;
 }
 #eta-text {
   color: var(--amb);
   font-weight: 800;
+  font-size: 12px;
   margin-left: 12px;
   text-align: right;
 }
@@ -666,18 +667,27 @@ body {
   border-radius: 7px;
   background: rgba(16,49,42,.86);
   color: var(--t1);
+  padding: 3px 8px;
+  font-size: 10px;
 }
 .map-bottom-overlay {
-  padding: 16px;
-  background: linear-gradient(180deg, transparent, rgba(6,23,21,.98) 34%);
+  bottom: 96px;
+  padding: 0 14px;
+  background: transparent;
 }
 .tabbar {
-  height: 88px;
-  padding: 10px 10px 18px;
-  background: rgba(11,32,29,.96);
-  border-top: 1px solid rgba(255,255,255,.12);
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  height: 72px;
+  flex-shrink: 0;
+  padding: 8px 8px 10px;
+  background: rgba(11,32,29,.9);
+  border: 1px solid rgba(255,255,255,.12);
   border-radius: 18px 18px 0 0;
-  box-shadow: 0 -18px 42px rgba(0,0,0,.3);
+  box-shadow: 0 -12px 30px rgba(0,0,0,.28);
+  backdrop-filter: blur(16px);
 }
 .tab {
   color: var(--t2);

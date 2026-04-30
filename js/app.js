@@ -675,6 +675,7 @@ function refreshBusMarkersForSlot() {
 }
 
 function checkProximity(busN, lat, lng) {
+  const el = $('eta-text');
   // Driver-specific proximity: prompt to onboard riders when bus nears boarding stop
   if (S.user?.role?.startsWith('driver')) {
     const nearbyStop = getNearestStop(lat, lng, S.slot);
@@ -704,7 +705,7 @@ function checkProximity(busN, lat, lng) {
 
   const targetStopValue = getRiderActiveStop(S.user);
   if (!targetStopValue) {
-    el.textContent = `Book your ${S.slot.toUpperCase()} ride in MyRide`;
+    if (el) el.textContent = `Book your ${S.slot.toUpperCase()} ride in MyRide`;
     return;
   }
   const stop = findStopByValue(targetStopValue);
